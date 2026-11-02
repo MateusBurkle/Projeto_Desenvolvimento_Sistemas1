@@ -1,0 +1,57 @@
+/* Marketplace público e áreas de doação: hardware.html (lista), compra.html (detalhe), app/doacoes/solicitacoes.html.
+   UC12, UC13, UC09 (Anunciar), Solicitar doação, UC11, UC19; DP-68 a DP-78; RNF01, RNF06.
+   Somente computador (DP-61/DP-76): 992, 1280 e 1920 px. Cores e fontes só da identidade (identidade.css). */
+
+.mkt { background: var(--leaf-green-tint); min-height: 100vh; }
+.mkt .navbar { background: var(--leaf-white); }
+.mkt .navbar .nav-link { color: var(--leaf-green-dark) !important; font-weight: 600; min-height: 44px; }
+.mkt .navbar .nav-link.active { text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; }
+.mkt .usuario-topo { color: var(--leaf-green-dark); max-width: 18rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mkt h1 { font-family: var(--font-titulo); color: var(--leaf-green-dark); }
+.mkt-rodape { background: var(--leaf-green-dark); color: var(--leaf-white); padding: 1.25rem 0; margin-top: 3rem; text-align: center; }
+
+/* Painel de filtros */
+.painel-filtros, .cartao-mkt { background: var(--leaf-white); border: 1px solid var(--leaf-green-tint-2); border-radius: 12px; padding: 1.25rem; }
+.painel-filtros { position: sticky; top: 5.5rem; }
+
+/* Grade de produtos: 2 colunas a partir de 992 px, 3 a partir de 1280 px, 4 a partir de 1920 px */
+.grade-mkt { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; list-style: none; padding: 0; margin: 0 0 1rem; }
+@media (min-width: 1280px) { .grade-mkt { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1920px) { .grade-mkt { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.produto-mkt { display: flex; flex-direction: column; gap: .35rem; height: 100%; background: var(--leaf-white); border: 1px solid var(--leaf-green-tint-2);
+  border-radius: 12px; padding: 1.25rem; min-width: 0; }
+.produto-mkt.selecionado { border: 2px solid var(--leaf-green-dark); background: var(--leaf-green-tint); }
+.produto-mkt h2 { font-size: 1.25rem; margin: 0; overflow-wrap: anywhere; }
+.produto-mkt .imagem-produto, .produto-mkt .icone-produto-caixa { width: 100%; height: 160px; border-radius: 8px; }
+.produto-mkt .imagem-produto { object-fit: cover; display: block; }
+.produto-mkt .icone-produto-caixa { display: flex; align-items: center; justify-content: center; background: var(--leaf-green-tint); }
+.detalhe-mkt .imagem-detalhe { width: 100%; max-width: 360px; height: 270px; object-fit: cover; border-radius: 12px; }
+.produto-mkt .icone-produto { font-size: 2rem; color: var(--leaf-green-dark); }
+.produto-mkt .preco, .detalhe-mkt .preco { font-size: 1.35rem; font-weight: 600; color: var(--leaf-green-dark); }
+.sem-valor { color: var(--leaf-green-dark); font-weight: 600; border-left: 4px solid var(--leaf-yellow); padding-left: .6rem; }
+.produto-mkt .grupo-acoes { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: auto; padding-top: .5rem; }
+.produto-mkt .grupo-acoes .btn { flex: 1 1 9rem; }
+
+/* Barra de solicitação de doação (ONG): fixa no rodapé da área visível */
+.barra-mkt { position: sticky; bottom: 0; z-index: 5; background: var(--leaf-green-dark); color: var(--leaf-white); border-radius: 12px 12px 0 0;
+  padding: .75rem 1rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; }
+.barra-mkt .btn { background: var(--leaf-white); color: var(--leaf-green-dark); border-color: var(--leaf-white); font-weight: 600; }
+.barra-mkt .btn:hover { background: var(--leaf-green-tint-2); }
+.barra-mkt .btn:focus-visible { outline: 3px solid var(--leaf-white) !important; outline-offset: 2px; }
+
+/* Detalhe do produto */
+.detalhe-mkt .icone-grande { font-size: 6rem; color: var(--leaf-green-dark); }
+.detalhe-mkt dl { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.25rem; margin: 0; }
+.detalhe-mkt dt { color: var(--leaf-gray); font-weight: 600; }
+.detalhe-mkt dd { margin: 0; overflow-wrap: anywhere; }
+.bloco-acao { background: var(--leaf-green-tint); border: 1px solid var(--leaf-green-tint-2); border-radius: 12px; padding: 1.25rem; margin-top: 1.25rem; }
+
+/* Solicitações de doação (app/doacoes/solicitacoes.html) */
+.selo-doa-pendente { color: var(--leaf-green-dark); background: var(--leaf-yellow-tint); border-style: dashed; }
+.selo-doa-aprovada { color: var(--leaf-white); background: var(--leaf-green-dark); }
+.selo-doa-recusada { color: var(--leaf-green-dark); background: var(--leaf-white); border-width: 2px; }
+.selo-doa-cancelada { color: var(--leaf-gray); background: var(--leaf-green-tint-2); }
+.selo-doa { white-space: nowrap; }
+.lista-itens-doa { margin: 0 0 .5rem; padding-left: 1.1rem; }
+.motivo-recusa { border-left: 4px solid var(--leaf-green-dark); background: var(--leaf-green-tint); padding: .5rem .75rem; margin: .5rem 0; }

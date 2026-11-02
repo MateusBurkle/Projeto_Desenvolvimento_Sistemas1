@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeafTi - Home</title>
+  <meta name="description" content="Transforme suas ideias em realidade digital">
+  <link rel="shortcut icon" href="images/logosemfundo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/identidade.css">
+  <link rel="stylesheet" type="text/css" href="css/reset.css">
+  <link rel="stylesheet" type="text/css" href="css/styles.css">
+</head>
+<body>
+  <a class="pular-conteudo" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="sticky-top bg-white border-bottom border-light">
+    <nav class="navbar navbar-expand-lg navbar-light container" aria-label="Menu principal">
+      <a class="navbar-brand" href="index.html">
+        <img src="images/logosemfundo.png" alt="Logo da LEAF TI" class="logo-cabecalho">
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Abrir ou fechar o menu">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse justify-content-between" id="navbarNav">
+        <ul class="navbar-nav mx-auto text-center">
+          <li class="nav-item"><a class="nav-link active" href="index.html">Início</a></li>
+          <li class="nav-item d-none" id="item-anunciar"><a class="nav-link fw-bold" id="link-anunciar" href="app/solicitacoes/index.html">Anuncie Aqui</a></li><!-- UC09, DP-82: Publico.js/index abaixo -->
+          <li class="nav-item"><a class="nav-link" href="#empresas">Empresas Colaboradoras</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="hardware.html" id="menuMarketplace" role="button" data-bs-toggle="dropdown" aria-expanded="false">Marketplace</a>
+            <ul class="dropdown-menu" aria-labelledby="menuMarketplace">
+              <li><a class="dropdown-item" href="hardware.html">Hardware</a></li>
+              <li><a class="dropdown-item" href="hardware.html">Marketplace</a></li>
+            </ul>
+          </li>
+        </ul>
+        <div class="text-center mt-3 mt-lg-0" id="area-usuario"><!-- Entrar / nome / Sair: js/publico.js --></div>
+      </div>
+    </nav>
+  </header>
+
+  <main id="conteudo" tabindex="-1">
+    <!-- Aviso após excluir a própria conta (DP-64) -->
+    <div class="container mt-3"><div id="aviso-inicio" class="alert alert-success d-none" role="status"></div></div>
+    <script>
+      (function () {
+        var a = sessionStorage.getItem('leafti.aviso_inicio');
+        if (a) { sessionStorage.removeItem('leafti.aviso_inicio'); var e = document.getElementById('aviso-inicio'); e.textContent = a; e.classList.remove('d-none'); }
+      })();
+    </script>
+    <section class="container my-5">
+      <div class="hero-leaf p-5 text-center rounded-4 shadow-sm position-relative overflow-hidden" id="hero">
+        <img src="images/logo vertical letra branca.png" alt="Logo da LEAF TI" class="mb-3" width="80">
+        <h1 class="display-5 fw-bold">Transforme Suas Ideias em Realidade Digital</h1>
+        <p class="col-lg-8 mx-auto lead text-muted">Economia circular inteligente. Aloque ou revenda hardwares corporativos obsoletos de forma sustentável.</p>
+        <div class="d-grid gap-2 d-sm-flex justify-content-sm-center mt-4">
+          <a href="hardware.html" class="btn btn-success btn-lg px-4">Ver Hardwares</a>
+          <a href="hardware.html" class="btn btn-outline-leaf btn-lg px-4">Ver Equipamentos</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="container my-5 text-center">
+      <div class="row g-4 justify-content-center">
+        <div class="col-md-5">
+          <div class="card product-card h-100 p-4 border-0">
+            <i class="fas fa-microchip fa-3x text-success mb-3"></i>
+            <h4 class="fw-bold">Hardware</h4>
+            <p class="text-muted">Encontre peças internas essenciais como processadores, placas de vídeo e memórias.</p>
+            <a href="hardware.html" class="btn btn-success mt-auto btn-sm">Explorar Peças</a>
+          </div>
+        </div>
+        <div class="col-md-5">
+          <div class="card product-card h-100 p-4 border-0">
+            <i class="fas fa-keyboard fa-3x text-success mb-3"></i>
+            <h4 class="fw-bold">Equipamentos</h4>
+            <p class="text-muted">Periféricos completos prontos para uso: monitores, setups de áudio, teclados e mouses.</p>
+            <a href="hardware.html" class="btn btn-success mt-auto btn-sm">Explorar Periféricos</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container py-5" id="empresas">
+      <div class="text-center mb-4">
+        <h2 class="fw-bold">Empresas Colaboradoras</h2>
+        <p class="text-muted">Instituições integradas ao ecossistema sustentável da LeafTI</p>
+      </div>
+      <div id="carouselParceiros" class="carousel slide" data-bs-ride="carousel">
+        <div class="carousel-inner text-center bg-light py-4 rounded-4">
+          <div class="carousel-item active">
+            <div class="d-flex flex-wrap justify-content-center gap-5 align-items-center py-2">
+              <span class="fs-4 fw-bold text-secondary"><i class="fas fa-university text-success me-2"></i>Banco Ditiae</span>
+              <span class="fs-4 fw-bold text-secondary"><i class="fas fa-brain text-success me-2"></i>Faustino Psicólogo</span>
+            </div>
+          </div>
+          <div class="carousel-item">
+            <div class="d-flex flex-wrap justify-content-center gap-5 align-items-center py-2">
+              <span class="fs-4 fw-bold text-secondary"><i class="fas fa-gem text-success me-2"></i>Tifanny Rays</span>
+              <span class="fs-4 fw-bold text-secondary"><i class="fas fa-store text-success me-2"></i>Borcelle Corp</span>
+            </div>
+          </div>
+        </div>
+        <button class="carousel-control-prev" type="button" data-bs-target="#carouselParceiros" data-bs-slide="prev">
+          <span class="carousel-control-prev-icon bg-secondary rounded-circle" aria-hidden="true"></span>
+        </button>
+        <button class="carousel-control-next" type="button" data-bs-target="#carouselParceiros" data-bs-slide="next">
+          <span class="carousel-control-next-icon bg-secondary rounded-circle" aria-hidden="true"></span>
+        </button>
+      </div>
+    </section>
+
+    <section class="container my-5 py-4">
+      <h2 class="text-center fw-bold mb-5">Depoimentos</h2>
+      <div class="row g-4 text-center">
+        <div class="col-md-4">
+          <div class="card h-100 p-4 product-card">
+            <p class="text-muted italic">"A Leaf TI nos forneceu os equipamentos necessários e nos orientou em práticas sustentáveis eficientes."</p>
+            <h5 class="fw-bold mt-3 mb-0">Jaqueline</h5>
+            <small class="text-success">Design</small>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100 p-4 product-card">
+            <p class="text-muted italic">"É um parceiro confiável que otimizou nossos custos corporativos com hardware de ponta reciclado."</p>
+            <h5 class="fw-bold mt-3 mb-0">Amanda</h5>
+            <small class="text-success">Gerente de Marketing</small>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100 p-4 product-card">
+            <p class="text-muted italic">"Uma escolha excelente. Valorizamos muito o compromisso real com a preservação do planeta."</p>
+            <h5 class="fw-bold mt-3 mb-0">Rose</h5>
+            <small class="text-success">CEO</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container my-5">
+      <div class="contact-section shadow text-white text-center">
+        <h2 class="fw-bold mb-2">Entre em Contato</h2>
+        <p class="mb-4">Tem dúvidas sobre processos de doação ou compras corporativas? Envie uma mensagem!</p>
+        <form id="form" class="mx-auto" style="max-width: 650px;">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6"><input type="text" class="form-control" placeholder="Nome" required></div>
+            <div class="col-md-6"><input type="text" class="form-control" placeholder="Sobrenome" required></div>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6"><input type="email" class="form-control" placeholder="E-mail" required></div>
+            <div class="col-md-6"><input type="tel" class="form-control" placeholder="Telefone" required></div>
+          </div>
+          <div class="mb-4"><textarea class="form-control" rows="4" placeholder="Sua Mensagem" required></textarea></div>
+          <button type="submit" class="btn btn-light fw-bold w-100 py-3 shadow-sm">Enviar Mensagem</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer-leaf pt-5 pb-3">
+    <div class="container">
+      <div class="row g-4 text-center text-md-start">
+        <div class="col-md-4">
+          <h5 class="fw-bold mb-3">Sobre Nós</h5>
+          <p class="text-white-50 small">Somos uma empresa dedicada a criar soluções web incríveis para nossos clientes com foco em TI sustentável.</p>
+        </div>
+        <div class="col-md-4">
+          <h5 class="fw-bold mb-3">Links Úteis</h5>
+          <ul class="list-unstyled small">
+            <li class="mb-2"><a href="quemsomos.html" class="text-decoration-none">Quem Somos</a></li>
+            <li class="mb-2"><a href="mailto:contato@LeafTI.com" class="text-decoration-none">E-mail</a></li>
+            <li class="mb-2"><a href="tel:+1234567890" class="text-decoration-none">Telefone</a></li>
+          </ul>
+        </div>
+        <div class="col-md-4">
+          <h5 class="fw-bold mb-3">Redes Sociais</h5>
+          <div class="d-flex justify-content-center justify-content-md-start gap-3 fs-5">
+            <a href="#" aria-label="facebook"><i class="fab fa-facebook" aria-hidden="true"></i></a>
+            <a href="#" aria-label="twitter"><i class="fab fa-twitter" aria-hidden="true"></i></a>
+            <a href="#" aria-label="instagram"><i class="fab fa-instagram" aria-hidden="true"></i></a>
+            <a href="#" aria-label="linkedin"><i class="fab fa-linkedin" aria-hidden="true"></i></a>
+          </div>
+        </div>
+      </div>
+      <hr class="my-4">
+      <p class="text-center small m-0">&copy; 2026 Leaf TI - Todos os direitos reservados</p>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/publico.js"></script>
+  <script>
+    /* UC09, DP-82: "Anuncie Aqui" -> visitante vai ao login com retorno; Empresa Doadora vai ao UC09; demais perfis não veem. */
+    document.addEventListener('DOMContentLoaded', function () {
+      var perfil = Publico.perfil(), item = document.getElementById('item-anunciar'), link = document.getElementById('link-anunciar');
+      if (!perfil) { link.href = Publico.urlLogin('app/solicitacoes/index.html'); item.classList.remove('d-none'); }
+      else if (perfil === 'Empresa Doadora') { item.classList.remove('d-none'); }
+    });
+  </script>
+</body>
+</html>

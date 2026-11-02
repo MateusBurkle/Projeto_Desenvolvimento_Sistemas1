@@ -1,0 +1,52 @@
+/* Telas do Módulo 4 (solicitações, avaliação e doações): app/solicitacoes/, app/avaliacao/, app/doacoes/.
+   UC09, UC10, UC11, UC19, UC20; RF05, RF12, RF21; RN05, RN12, RN21; RNF01, RNF06.
+   Complementa usuarios.css, organizacoes.css e equipamentos.css (tabela-usuarios vira cartões abaixo de 992 px). */
+
+/* Selos da solicitação: texto + ícone + forma (nunca só cor) */
+.selo-sol-aguardando { color: var(--leaf-green-dark); background: var(--leaf-yellow-tint); border-style: dashed; }
+.selo-sol-andamento { color: var(--leaf-green-dark); background: var(--leaf-white); }
+.selo-sol-avaliada { color: var(--leaf-white); background: var(--leaf-green-dark); }
+.selo-dest-pendente { color: var(--leaf-green-dark); background: var(--leaf-yellow-tint); border-style: dashed; }
+.selo-dest-ok { color: var(--leaf-green-dark); background: var(--leaf-green-tint-2); }
+.selo-sol-aguardando, .selo-sol-andamento, .selo-sol-avaliada, .selo-dest-pendente, .selo-dest-ok { white-space: nowrap; }
+
+/* Faixas de aviso informativas (não são erro): borda tracejada + ícone + texto */
+.aviso-info, .aviso-pendencias, .aviso-ok { border-radius: 8px; padding: .75rem 1rem; color: var(--leaf-green-dark); }
+.aviso-info { background: var(--leaf-yellow-tint); border: 2px dashed var(--leaf-green-dark); }
+.aviso-pendencias { background: var(--leaf-yellow-tint); border: 2px solid var(--leaf-yellow); }
+.aviso-ok { background: var(--leaf-green-tint); border: 2px solid var(--leaf-green-dark); }
+.aviso-pendencias ul { margin: .25rem 0 0; padding-left: 1.25rem; }
+
+/* Estado vazio */
+.estado-vazio { text-align: center; padding: 1.5rem 1rem; }
+.estado-vazio .titulo-vazio { font-family: var(--font-titulo); color: var(--leaf-green-dark); font-size: 1.25rem; font-weight: 700; }
+
+/* Linhas de item do formulário de nova solicitação (UC09 passos 2-3) */
+.linha-item { border: 1px solid var(--leaf-green-tint-2); border-radius: 10px; background: var(--leaf-green-tint); padding: .75rem 1rem 1rem; margin-bottom: .75rem; min-width: 0; }
+.linha-item legend { float: none; width: auto; font-size: 1.125rem; font-weight: 600; color: var(--leaf-green-dark); padding: 0 .25rem; margin-bottom: .25rem; }
+
+/* Cartão de item no detalhe */
+.cartao-item { border: 1px solid var(--leaf-green-tint-2); border-radius: 10px; padding: .75rem 1rem; margin-bottom: 1rem; background: var(--leaf-white); min-width: 0; }
+.cartao-item .meta-item { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin-bottom: .5rem; }
+.tabela-sol td[data-rotulo="Valor"] { white-space: nowrap; }
+.tabela-sol .sub { display: block; }
+
+/* Dados em lista de definição (detalhe da doação e cabeçalho da solicitação) */
+.dados-sol { display: grid; grid-template-columns: 1fr; gap: .25rem 1.5rem; margin: 0; }
+.dados-sol dt { font-weight: 600; color: var(--leaf-green-dark); }
+.dados-sol dd { margin: 0 0 .5rem; overflow-wrap: anywhere; }
+@media (min-width: 768px) {
+  .dados-sol { grid-template-columns: max-content 1fr; }
+  .dados-sol dd { margin: 0; }
+}
+
+/* Grupo de botões e opções de destinação: alvo de toque >= 44 px e foco visível */
+.opcao-destinacao { display: flex; align-items: flex-start; gap: .5rem; min-height: 44px; padding: .5rem .75rem; border: 1px solid var(--leaf-green-tint-2); border-radius: 8px; margin-bottom: .5rem; }
+.opcao-destinacao input { width: 1.5rem; height: 1.5rem; margin-top: .1rem; flex-shrink: 0; accent-color: var(--leaf-green-dark); }
+.opcao-destinacao label { flex: 1; cursor: pointer; }
+.opcao-destinacao.desabilitada label { color: var(--leaf-gray); cursor: not-allowed; }
+.opcao-destinacao input:focus-visible { outline: 3px solid var(--leaf-green-dark); outline-offset: 2px; }
+.app a.btn:focus-visible, .app .btn:focus-visible, .app .form-control:focus-visible, .app .form-select:focus-visible { outline: 3px solid var(--leaf-green-dark); outline-offset: 2px; }
+.app a.btn { display: inline-flex; align-items: center; justify-content: center; }
+.vista-titulo:focus { outline: none; }
+.vista-titulo:focus-visible { outline: 3px solid var(--leaf-green-dark); outline-offset: 4px; }

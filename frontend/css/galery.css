@@ -1,0 +1,94 @@
+.gallery {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    margin: 5rem auto; /* Centraliza horizontalmente */
+    position: relative;
+}
+
+.gallery--title {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.gallery--text {
+    font-size: .8rem;
+    line-height: 142.5%;
+    padding: 1rem;
+    text-align: center;
+}
+
+.gallery--text span {
+    color: var(--blue);
+}
+
+.gallery--container {
+    max-width: 90vw; /* Definindo uma largura máxima */
+    overflow: hidden;
+    position: relative;
+}
+
+.galleryList {
+    display: flex;
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    transition: transform 0.5s ease;
+}
+
+.galleryList--item {
+    flex: 0 0 auto;
+    margin-right: 10px;
+}
+
+.galleryList--image {
+    width: 7rem;
+    height: 7rem;
+    flex-shrink: 0;
+}
+
+.galleryList--text {
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-align: center;
+}
+
+@media screen and (min-width: 1024px) {
+    .gallery--title {
+        font-size: 2rem;
+    }
+
+    .gallery--text {
+        font-size: 1rem;
+    }
+
+    .galleryList--image {
+        width: 15rem;
+        height: 15rem;
+    }
+}
+
+
+.botaocarrosel > button{
+    width: 50px;
+}
+.gallery--prev,
+.gallery--next {
+    position: absolute;
+    top: 50%; /* Distância de 10px do fundo */
+    width: 1px;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    z-index: 1;
+}
+
+.gallery--prev {
+    left: 1px; /* Distância de 10px da esquerda */
+}
+
+.gallery--next {
+    right: 10px; /* Distância de 10px da direita */
+    transform: scaleX(-1);
+}

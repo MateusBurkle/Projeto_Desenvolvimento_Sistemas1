@@ -1,0 +1,24 @@
+Imagens de demonstracao do LEAF TI
+==================================
+
+Origem: 9 fotografias REAIS de equipamentos, obtidas no Wikimedia Commons (licencas livres),
+recortadas em 4:3 e redimensionadas para 640x480 (JPEG). Ao reutilizar, mantenha a atribuicao.
+
+Arquivo               Foto (Wikimedia Commons)                          Autor              Licenca
+demo-notebook-1.jpg   File:IBM Thinkpad R51.jpg                         Andre Karwath      CC BY-SA 4.0
+demo-notebook-2.jpg   File:Schenker VIA14 Laptop asv2021-01.jpg         A.Savin            Free Art License
+demo-monitor-1.jpg    File:Monitores led de aoc .jpg                    EEIM               CC BY-SA 3.0
+demo-monitor-2.jpg    File:Minitor led de aoc + raton.jpg               EEIM               CC BY-SA 3.0
+demo-teclado.jpg      File:QWERTY keyboard.jpg                          MichaelMaggs       CC BY-SA 3.0
+demo-placa-mae.jpg    File:ASUS P5N7A-VM.JPG                            Soeb               CC0
+demo-placa-video.jpg  File:2023 MSI GeForce RTX 2080 Gaming X Trio (3).jpg  Jacek Halicki  CC BY-SA 4.0
+demo-desktop.jpg      File:Dell Optiplex 745 flat.JPG                   BrokenSphere       CC BY-SA 3.0
+demo-impressora.jpg   File:Canon PIXMA TS 5380 Multifunction ink-jet Printer.jpg  Dinkun Chen  CC BY-SA 4.0
+
+Uso: o script backend/scripts/popular_demonstracao.py envia estas imagens pelo fluxo de upload
+da API (PUT /equipamentos/{id}/imagem); o sistema grava copias com nome gerado em
+armazenamento/imagens/equipamentos (ou LEAF_IMAGENS_DIR). Esta pasta nao e usada diretamente
+pelo servidor.
+
+demo-roteador.jpg     File:TP-Link TL-WR740N router HS1.jpg             IagoQns            CC BY 4.0
+demo-ssd.jpg          Derivada de frontend/images/ssd.png (imagem do proprio projeto, SSD Kingston)

@@ -1,0 +1,19 @@
+/* Relatórios (UC22 a UC24). Complementa usuarios.css (tabela-usuarios vira cartões abaixo de 992 px). Variáveis de identidade.css. */
+.nav-tabs { flex-wrap: wrap; }
+.nav-tabs .nav-link { color: var(--leaf-green-dark); font-weight: 600; white-space: nowrap; min-height: 44px; }
+.nav-tabs .nav-link.active { color: var(--leaf-green-dark); border-bottom: 3px solid var(--leaf-green-dark); }
+.nav-tabs .nav-link:focus-visible, .tab-pane:focus-visible { outline: 3px solid var(--leaf-green-dark); outline-offset: 2px; }
+.totais-rel { display: grid; grid-template-columns: 1fr; gap: .75rem; margin-bottom: 1rem; }
+@media (min-width: 576px) { .totais-rel { grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); } }
+.total-rel { border: 1px solid var(--leaf-green-tint-2); background: var(--leaf-green-tint); border-radius: 10px; padding: .75rem 1rem; }
+.total-rel .rotulo { display: block; color: var(--leaf-green-dark); font-weight: 600; }
+.total-rel .numero { font-family: var(--font-titulo); font-size: 1.5rem; font-weight: 700; color: var(--leaf-green-dark); }
+.lista-itens-rel { margin: 0; padding-left: 1.1rem; }
+.tabela-rel td[data-rotulo="Valor"], .tabela-rel td[data-rotulo="Data"], .tabela-rel td[data-rotulo="Quantidade"], .tabela-rel td[data-rotulo="Total"] { white-space: nowrap; }
+.cartao-solicitacao { border: 1px solid var(--leaf-green-tint-2); border-radius: 10px; background: var(--leaf-white); padding: 1rem; margin-bottom: 1rem; }
+.cartao-solicitacao.com-pendencia { border: 2px solid var(--leaf-yellow-dark, #8a6d00); background: var(--leaf-yellow-tint); }
+.cartao-solicitacao h3 { font-size: 1.25rem; overflow-wrap: anywhere; }
+.aviso-pendente { color: var(--leaf-text, #333); font-weight: 600; }
+.selo-pendente { display: inline-block; font-weight: 600; padding: .1rem .5rem; border: 1px solid var(--leaf-yellow-dark, #8a6d00); border-radius: 6px; color: var(--leaf-text, #333); background: var(--leaf-white); }
+.selo-dest { display: inline-block; font-weight: 600; padding: .1rem .5rem; border: 1px solid var(--leaf-green-dark); border-radius: 6px; color: var(--leaf-green-dark); background: var(--leaf-green-tint-2); }
+.rel-sub { display: block; color: var(--leaf-gray); }

@@ -1,0 +1,177 @@
+openapi: 3.0.3
+info:
+  title: LEAF TI - Módulo 6 - Relatórios
+  version: 1.0.0
+  description: |
+    UC22 Relatório de vendas; UC23 Relatório de equipamentos; UC24 Relatório de Empresas Doadoras, empresas e ONGs.
+    Requisitos: RF03, RF16, RF17, RF18, RF21; RN03, RN16, RN17, RN18, RN21; RNF04, RNF05.
+    Spec: especificacoes/modulo-6.md. Decisões: DP-57 a DP-60 (DELEGADAS). Convenções: docs/CONVENCOES.md.
+    Regras comuns: somente leitura (nenhuma escrita). Perfis: Administrador e Funcionário; demais -> 403, sem token -> 401 (RN17, RNF05).
+    Datas ISO (AAAA-MM-DD). Código em backend/app/relatorios/{router,schemas,service,repository}.py.
+paths:
+  /relatorios/vendas:
+    get:
+      operationId: relatorioVendas
+      summary: UC22, RF16, RN16 - vendas Confirmadas no período
+      parameters:
+        - {name: data_de, in: query, required: true, schema: {type: string, format: date}}
+        - {name: data_ate, in: query, required: true, schema: {type: string, format: date}}
+      description: |
+        Período obrigatório (UC22 passo 2-3). Ausente/formato inválido -> 400 PERIODO_INVALIDO; data_de > data_ate -> 400 PERIODO_INVALIDO (FE1).
+        Inclui só VENDA.situacao='Confirmada' com data_venda entre data_de e data_ate (inclusive). Pendente/Cancelada nunca entram (RN16).
+        Ordenação: data_venda, id_venda crescente. Sem vendas: 200 com vendas=[] e totais 0 (FA1). Sem paginação.
+        valor_total de cada venda = soma de ITEM_VENDA.valor; valor_total do relatório = soma dos valor_total das vendas listadas (RN16).
+      responses:
+        '200': {description: Relatório, content: {application/json: {schema: {$ref: '#/components/schemas/RelatorioVendas'}}}}
+        '400': {$ref: '#/components/responses/Erro'}
+        '401': {$ref: '#/components/responses/Erro'}
+        '403': {$ref: '#/components/responses/Erro'}
+  /relatorios/equipamentos:
+    get:
+      operationId: relatorioEquipamentos
+      summary: UC23, RF17, RN17 - equipamentos por categoria, situação e período de cadastro
+      parameters:
+        - {name: id_categoria, in: query, schema: {type: integer}}
+        - {name: situacao, in: query, schema: {type: string, enum: [Recebido, Em avaliação, Em manutenção, Recondicionado, Disponível, Vendido, Doado, Destinado à reciclagem]}}
+        - {name: data_de, in: query, schema: {type: string, format: date}, description: "EQUIPAMENTO.data_recebimento >="}
+        - {name: data_ate, in: query, schema: {type: string, format: date}, description: "EQUIPAMENTO.data_recebimento <="}
+        - {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
+        - {name: size, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      description: |
+        Filtros opcionais; sem filtros devolve todos os equipamentos (FA1), inclusive inativos (campo `ativo`).
+        Filtro inválido (situacao fora da lista, data inválida, data_de > data_ate) -> 400 FILTRO_INVALIDO com `campos` (FE1).
+        id_categoria inexistente -> 200 vazio. Ordenação: id_equipamento crescente.
+        Origem = EQUIPAMENTO.origem. Destinação quando registrada: Vendido -> 'Venda' (+ cliente da venda Confirmada em destino_detalhe, data_venda);
+        Doado -> 'Doação' (+ ONG e data_doacao da DOACAO); Destinado à reciclagem -> 'Reciclagem'; Disponível -> 'Venda (disponível)'; demais -> null.
+        `resumo_por_situacao` conta TODOS os equipamentos filtrados, não só a página.
+      responses:
+        '200': {description: Relatório, content: {application/json: {schema: {$ref: '#/components/schemas/RelatorioEquipamentos'}}}}
+        '400': {$ref: '#/components/responses/Erro'}
+        '401': {$ref: '#/components/responses/Erro'}
+        '403': {$ref: '#/components/responses/Erro'}
+  /relatorios/organizacoes-destinacoes:
+    get:
+      operationId: relatorioOrganizacoesDestinacoes
+      summary: UC24, RF18, RF21, RN18, RN21 - solicitações das Empresas Doadoras, avaliação e destinações
+      parameters:
+        - {name: id_organizacao_doadora, in: query, schema: {type: integer}}
+        - {name: situacao, in: query, schema: {type: string, enum: [Aguardando avaliação, Em avaliação, Avaliada]}}
+        - {name: data_de, in: query, schema: {type: string, format: date}, description: "SOLICITACAO.data_solicitacao >="}
+        - {name: data_ate, in: query, schema: {type: string, format: date}}
+        - {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
+        - {name: size, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      description: |
+        Lista TODAS as solicitações (RN18), também as sem avaliação ou destinação final (FA1), por data_solicitacao e id decrescentes.
+        Filtro inválido -> 400 FILTRO_INVALIDO. Cada solicitação: Empresa Doadora, situação, itens (tipo, modelo, quantidade,
+        equipamentos_cadastrados) e, por item, os equipamentos com condicao, situacao e destinacao (Venda / Venda (disponível) / Doação com
+        ong_beneficiada e data_doacao / Reciclagem / null). Reciclagem nunca é associada a venda nem doação (FA2).
+        Dados incompletos (FE1): item com equipamentos_cadastrados < quantidade, equipamento com condicao 'A avaliar' ou sem destinação
+        registrada (situação Recebido, Em avaliação, Em manutenção, Recondicionado) => `avaliacao_pendente`=true e `pendencias` lista textos
+        (ex.: "Item 3: faltam 2 equipamentos a cadastrar", "Equipamento 12: condição a avaliar", "Equipamento 12: destinação não registrada").
+        Destinação não registrada NUNCA aparece como concluída (destinacao=null).
+      responses:
+        '200': {description: Relatório, content: {application/json: {schema: {$ref: '#/components/schemas/RelatorioOrganizacoes'}}}}
+        '400': {$ref: '#/components/responses/Erro'}
+        '401': {$ref: '#/components/responses/Erro'}
+        '403': {$ref: '#/components/responses/Erro'}
+components:
+  responses:
+    Erro:
+      description: Erro padrão {codigo, mensagem, campos}
+      content: {application/json: {schema: {$ref: '#/components/schemas/Erro'}}}
+  schemas:
+    Erro:
+      type: object
+      required: [codigo, mensagem]
+      properties: {codigo: {type: string}, mensagem: {type: string}, campos: {type: object, additionalProperties: {type: string}}}
+    RelatorioVendas:
+      type: object
+      properties:
+        data_de: {type: string, format: date}
+        data_ate: {type: string, format: date}
+        vendas:
+          type: array
+          items:
+            type: object
+            properties:
+              id_venda: {type: integer}
+              data_venda: {type: string, format: date}
+              id_organizacao_cliente: {type: integer}
+              cliente: {type: string}
+              forma_pagamento: {type: string}
+              quantidade: {type: integer}
+              valor_total: {type: number}
+              itens:
+                type: array
+                items:
+                  type: object
+                  properties: {id_equipamento: {type: integer}, identificacao: {type: string}, modelo: {type: string}, categoria: {type: string}, valor: {type: number}}
+        total_vendas: {type: integer}
+        total_equipamentos: {type: integer}
+        valor_total: {type: number}
+    RelatorioEquipamentos:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id_equipamento: {type: integer}
+              identificacao: {type: string}
+              modelo: {type: string}
+              id_categoria: {type: integer}
+              categoria: {type: string}
+              condicao: {type: string}
+              situacao: {type: string}
+              ativo: {type: boolean}
+              valor: {type: number, nullable: true}
+              data_recebimento: {type: string, format: date}
+              origem: {type: string}
+              destinacao: {type: string, nullable: true}
+              destino_detalhe: {type: string, nullable: true}
+              data_destinacao: {type: string, format: date, nullable: true}
+        total: {type: integer}
+        page: {type: integer}
+        size: {type: integer}
+        resumo_por_situacao: {type: object, additionalProperties: {type: integer}}
+    RelatorioOrganizacoes:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id_solicitacao: {type: integer}
+              id_organizacao_doadora: {type: integer}
+              empresa_doadora: {type: string}
+              data_solicitacao: {type: string, format: date}
+              situacao: {type: string}
+              avaliacao_pendente: {type: boolean}
+              pendencias: {type: array, items: {type: string}}
+              itens:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id_item_solicitacao: {type: integer}
+                    tipo: {type: string}
+                    modelo: {type: string}
+                    quantidade: {type: integer}
+                    equipamentos_cadastrados: {type: integer}
+                    equipamentos:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id_equipamento: {type: integer}
+                          identificacao: {type: string}
+                          condicao: {type: string}
+                          situacao: {type: string}
+                          destinacao: {type: string, nullable: true}
+                          ong_beneficiada: {type: string, nullable: true}
+                          data_doacao: {type: string, format: date, nullable: true}
+        total: {type: integer}
+        page: {type: integer}
+        size: {type: integer}

@@ -1,0 +1,132 @@
+openapi: 3.0.3
+info:
+  title: LEAF TI - Módulo 7 Marketplace e solicitação de doação
+  version: 1.0.0
+  description: |
+    Pedido docs/PEDIDO_MARKETPLACE.md; DP-68 a DP-78. Prefixo /api/v1. Erros no padrão de docs/CONVENCOES.md
+    ({codigo, mensagem, campos}). Substitui a DP-44. Novo UC "Solicitar doação"; altera UC09 (Anunciar), UC11, UC12, UC13, UC19.
+
+# ESQUEMA FINAL (DP-75): criado por DDL do back-end (CREATE TABLE IF NOT EXISTS), sem editar banco/Codigo_Modelo_Fisico.sql.
+# O Cowork leva estas tabelas ao SQL, DER e dicionário de dados.
+x-ddl: |
+  CREATE TABLE IF NOT EXISTS SOLICITACAO_DOACAO (
+      id_solicitacao_doacao INTEGER PRIMARY KEY,
+      id_organizacao_ong INTEGER NOT NULL,
+      data_solicitacao TEXT NOT NULL,                       -- AAAA-MM-DD
+      situacao TEXT NOT NULL CHECK (situacao IN ('Pendente','Aprovada','Recusada','Cancelada')),
+      motivo_recusa TEXT NULL,                              -- obrigatório quando Recusada (DP-73)
+      decidido_por TEXT NULL,                               -- nome de quem aprovou/recusou, copiado (sem FK p/ USUARIO, DP-66/DP-77)
+      data_decisao TEXT NULL,                               -- AAAA-MM-DD (aprovação, recusa ou cancelamento)
+      FOREIGN KEY (id_organizacao_ong) REFERENCES ORGANIZACAO(id_organizacao) ON DELETE RESTRICT ON UPDATE CASCADE
+  );
+  CREATE TABLE IF NOT EXISTS ITEM_SOLICITACAO_DOACAO (
+      id_item_solicitacao_doacao INTEGER PRIMARY KEY,
+      id_solicitacao_doacao INTEGER NOT NULL,
+      id_equipamento INTEGER NOT NULL,
+      FOREIGN KEY (id_solicitacao_doacao) REFERENCES SOLICITACAO_DOACAO(id_solicitacao_doacao) ON DELETE RESTRICT ON UPDATE CASCADE,
+      FOREIGN KEY (id_equipamento) REFERENCES EQUIPAMENTO(id_equipamento) ON DELETE RESTRICT ON UPDATE CASCADE,
+      UNIQUE (id_solicitacao_doacao, id_equipamento)
+  );
+x-regras: |
+  Reserva (DP-70): equipamento com item em SOLICITACAO_DOACAO Pendente, ou em VENDA Pendente, está reservado: sai do marketplace e não
+  entra em outro pedido/solicitação (422 EQUIPAMENTO_RESERVADO). A situação do EQUIPAMENTO não muda enquanto Pendente. Checagem e gravação
+  na mesma transação (BEGIN IMMEDIATE). Equipamento elegível: situacao Disponível e ativo (RN12/RN13).
+  Aprovar (UC11): para cada item cria DOACAO (id_organizacao_ong, data_doacao=hoje) e muda o equipamento para Doado, tudo em uma
+  transação; ONG precisa estar Ativa (senão 422 ORGANIZACAO_INVALIDA). Recusar/Cancelar liberam a reserva (apenas mudam a situação).
+  Só Pendente muda de estado (422 SOLICITACAO_NAO_PENDENTE). Aprovada/Recusada/Cancelada são finais.
+  Valor (DP-74): só para Cliente Empresa autenticado. Visitante, ONG, Doadora, Administrador e Funcionário não recebem `valor`; o front
+  mostra "Entre como Cliente Empresa para ver o valor e comprar" no lugar do preço. Origem e vínculos internos nunca saem.
+
+paths:
+  /marketplace/categorias:
+    get:
+      tags: [Marketplace]
+      operationId: listarCategoriasMarketplace
+      summary: Categorias ativas com produtos (público, sem login)
+      responses: { '200': { description: "Lista [{id_categoria, nome}]." } }
+  /marketplace/produtos:
+    get:
+      tags: [Marketplace]
+      operationId: listarProdutosMarketplace
+      summary: Lista pública de produtos Disponíveis, ativos e não reservados (UC12)
+      description: |
+        Sem login. Token opcional: com Cliente Empresa devolve também `valor`. Query: id_categoria, busca (modelo), page, size (padrão 12, máx 100).
+        Item: {id_equipamento, modelo, categoria, id_categoria, condicao, valor?}. Ordenação: modelo asc.
+      responses: { '200': { description: "Página {items,total,page,size}." } }
+  /marketplace/produtos/{id_equipamento}:
+    get:
+      tags: [Marketplace]
+      operationId: obterProdutoMarketplace
+      summary: Detalhe público do produto
+      description: Mesmos campos da lista. Não elegível ou reservado -> 404 NAO_ENCONTRADO.
+      responses: { '200': { description: Produto. }, '404': { description: NAO_ENCONTRADO. } }
+  /doacoes/solicitacoes:
+    post:
+      tags: [Solicitação de doação]
+      operationId: criarSolicitacaoDoacao
+      summary: ONG solicita doação de um ou mais equipamentos (novo UC)
+      description: |
+        Perfil: Cliente ONG da organização Ativa. Corpo {ids_equipamentos:[int], 1 a 20, sem repetir}. Nasce Pendente com data_solicitacao=hoje.
+        Erros: 422 EQUIPAMENTO_INDISPONIVEL (não Disponível/inativo), 422 EQUIPAMENTO_RESERVADO, 422 ORGANIZACAO_INVALIDA, 400 DADOS_INVALIDOS.
+      responses: { '201': { description: Solicitação criada. } }
+    get:
+      tags: [Solicitação de doação]
+      operationId: listarSolicitacoesDoacao
+      summary: Lista (UC19 ampliado)
+      description: |
+        ONG vê só as da própria organização; Administrador e Funcionário veem todas. Filtros situacao, page, size. Outra ONG -> 404 no detalhe.
+        Resposta {items,total,page,size}; item = Solicitação: {id_solicitacao_doacao, id_organizacao_ong, nome_ong, nome_organizacao (igual a nome_ong),
+        data_solicitacao, situacao (Pendente|Aprovada|Recusada|Cancelada), motivo_recusa|null, decidido_por|null, data_decisao|null,
+        itens:[{id_equipamento, modelo, categoria, condicao}]}. O POST e os PATCH devolvem a mesma Solicitação.
+      responses: { '200': { description: Página. } }
+  /doacoes/solicitacoes/{id_solicitacao_doacao}:
+    get:
+      tags: [Solicitação de doação]
+      operationId: obterSolicitacaoDoacao
+      summary: Detalhe (mesma forma do item da lista) com itens {id_equipamento, modelo, categoria, condicao}, situação, motivo_recusa, decidido_por, data_decisao (sem valor para ONG)
+      responses: { '200': { description: Solicitação. }, '404': { description: NAO_ENCONTRADO. } }
+  /doacoes/solicitacoes/{id_solicitacao_doacao}/aprovar:
+    patch:
+      tags: [Solicitação de doação]
+      operationId: aprovarSolicitacaoDoacao
+      summary: Aprova e executa o UC11 (Administrador e Funcionário)
+      responses: { '200': { description: Aprovada. }, '422': { description: "SOLICITACAO_NAO_PENDENTE, ORGANIZACAO_INVALIDA, EQUIPAMENTO_INDISPONIVEL." } }
+  /doacoes/solicitacoes/{id_solicitacao_doacao}/recusar:
+    patch:
+      tags: [Solicitação de doação]
+      operationId: recusarSolicitacaoDoacao
+      summary: Recusa com motivo obrigatório (Administrador e Funcionário)
+      description: Corpo {motivo} 3 a 500 caracteres; ausente -> 400 DADOS_INVALIDOS (campos.motivo). Registra decidido_por e data_decisao.
+      responses: { '200': { description: Recusada. }, '422': { description: SOLICITACAO_NAO_PENDENTE. } }
+  /doacoes/solicitacoes/{id_solicitacao_doacao}/cancelar:
+    patch:
+      tags: [Solicitação de doação]
+      operationId: cancelarSolicitacaoDoacao
+      summary: ONG cancela enquanto Pendente (sem motivo)
+      responses: { '200': { description: Cancelada. }, '422': { description: SOLICITACAO_NAO_PENDENTE. } }
+
+# Também neste módulo: POST/PUT/itens de /vendas passam a recusar equipamento reservado por doação (422 EQUIPAMENTO_RESERVADO);
+# GET /catalogo (módulo 5) deixa de listar equipamento reservado por doação. A tela app/catalogo é aposentada (DP-78); a API /catalogo permanece.
+
+x-permissoes:
+  GET   /marketplace/categorias: [público]
+  GET   /marketplace/produtos: [público; valor só Cliente Empresa]
+  GET   /marketplace/produtos/{id}: [público; valor só Cliente Empresa]
+  POST  /doacoes/solicitacoes: [Cliente ONG]
+  GET   /doacoes/solicitacoes: [Cliente ONG (própria), Administrador, Funcionário]
+  GET   /doacoes/solicitacoes/{id}: [Cliente ONG (própria), Administrador, Funcionário]
+  PATCH /doacoes/solicitacoes/{id}/aprovar: [Administrador, Funcionário]
+  PATCH /doacoes/solicitacoes/{id}/recusar: [Administrador, Funcionário]
+  PATCH /doacoes/solicitacoes/{id}/cancelar: [Cliente ONG (própria)]
+x-codigos-erro:
+  EQUIPAMENTO_INDISPONIVEL: "422"
+  EQUIPAMENTO_RESERVADO: "422"
+  SOLICITACAO_NAO_PENDENTE: "422"
+  ORGANIZACAO_INVALIDA: "422"
+  DADOS_INVALIDOS: "400"
+  NAO_ENCONTRADO: "404"
+  NAO_AUTENTICADO: "401"
+  SEM_PERMISSAO: "403"
+
+# DP-84 a DP-87: GET /marketplace/produtos e /marketplace/produtos/{id} passam a trazer `imagem_url` (string|null, "/imagens/equipamentos/<nome>"),
+# sem expor identificação interna, origem nem vínculos. Sem imagem: null (o front mostra o ícone padrão). alt = `modelo`.

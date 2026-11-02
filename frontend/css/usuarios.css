@@ -1,0 +1,47 @@
+/* Telas do Módulo 1 (usuários): app/usuarios/. UC02, UC03; RNF01, RNF06. Usa variáveis de identidade.css. */
+.app .form-control, .app .form-select { min-height: 44px; font-size: 1rem; }
+.app .form-label { font-weight: 600; color: var(--leaf-green-dark); }
+.app .btn { font-size: 1rem; }
+.app .btn-outline-leaf {
+  --bs-btn-color: var(--leaf-green-dark); --bs-btn-border-color: var(--leaf-green-dark);
+  --bs-btn-hover-bg: var(--leaf-green-dark); --bs-btn-hover-color: var(--leaf-white);
+  --bs-btn-hover-border-color: var(--leaf-green-dark);
+  --bs-btn-active-bg: var(--leaf-green-dark-hover); --bs-btn-active-color: var(--leaf-white);
+  --bs-btn-disabled-color: var(--leaf-gray); --bs-btn-disabled-border-color: var(--leaf-gray);
+}
+/* Excluir: não usa vermelho (reservado a mensagens de erro); verde escuro sólido + ícone e texto */
+.app .btn-excluir { background: var(--leaf-white); color: var(--leaf-green-dark); border: 2px solid var(--leaf-green-dark); font-weight: 600; }
+.app .btn-excluir:hover { background: var(--leaf-green-dark); color: var(--leaf-white); }
+
+/* Sucesso (verde escuro sobre verde claro; ícone + texto, RNF06) */
+.alert-success {
+  --bs-alert-color: var(--leaf-green-dark); --bs-alert-bg: var(--leaf-green-tint-2);
+  --bs-alert-border-color: var(--leaf-green-dark); border-width: 2px;
+}
+.alert-success::before { content: "\2714\FE0E\0000A0Pronto: "; font-weight: 700; }
+.alert:focus { outline: 3px solid var(--leaf-green-dark); outline-offset: 2px; }
+/* Alvo de toque mínimo 44x44 (RNF01) */
+.app .btn-close { width: 44px; height: 44px; padding: 0; background-size: 1rem; box-sizing: border-box; opacity: 1; }
+.app .badge-voce { display: inline-block; font-size: 1rem; font-weight: 600; line-height: 1.4; padding: .1rem .5rem; color: var(--leaf-green-dark); background: var(--leaf-green-tint-2); border: 1px solid var(--leaf-green-dark); border-radius: 6px; }
+
+/* Tabela: cartões abaixo de 992 px (sem rolagem horizontal), tabela a partir daí */
+.tabela-usuarios { width: 100%; }
+.tabela-usuarios thead th { background: var(--leaf-green-dark); color: var(--leaf-white); white-space: nowrap; }
+.tabela-usuarios td, .tabela-usuarios th { vertical-align: middle; overflow-wrap: break-word; word-break: normal; }
+@media (max-width: 991.98px) {
+  .tabela-usuarios thead { position: absolute; left: -9999px; }
+  .tabela-usuarios, .tabela-usuarios tbody, .tabela-usuarios tr, .tabela-usuarios td { display: block; width: 100%; }
+  .tabela-usuarios tr { background: var(--leaf-white); border: 1px solid var(--leaf-green-tint-2); border-radius: 10px; margin-bottom: .75rem; padding: .5rem .75rem; }
+  .tabela-usuarios td { border: 0; padding: .25rem 0; }
+  .tabela-usuarios td[data-rotulo]::before { content: attr(data-rotulo) ": "; font-weight: 600; color: var(--leaf-green-dark); }
+  .tabela-usuarios td.acoes { display: flex; flex-wrap: wrap; gap: .5rem; padding-top: .5rem; }
+  .tabela-usuarios td.acoes .btn { flex: 1 1 8rem; }
+}
+.tabela-usuarios td.acoes { white-space: nowrap; }
+@media (min-width: 992px) { .tabela-usuarios td.acoes .btn + .btn { margin-left: .5rem; } }
+
+.lista-funcionalidades { columns: 1; }
+@media (min-width: 576px) { .lista-funcionalidades { columns: 2; } }
+.dica-campo { color: var(--leaf-gray); }
+.modal-title { font-family: var(--font-titulo); color: var(--leaf-green-dark); }
+.modal-dialog-scrollable .modal-body { overflow-x: hidden; }

@@ -1,0 +1,28 @@
+/* Tela de login (UC04). Usa as variáveis de css/identidade.css. */
+.tela-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--leaf-green-tint); /* fundo liso verde muito claro (DP-07, DP-10) */
+}
+
+.cartao-login {
+  width: 100%;
+  max-width: 420px;
+  background: var(--leaf-white);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  padding: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .cartao-login { padding: 2.5rem; }
+}
+
+.tela-login .form-control { min-height: 44px; font-size: 1rem; }
+.tela-login .btn { min-height: 44px; font-size: 1rem; }
+
+/* Alvos de toque >= 44 px (RNF06) */
+.cartao-login .link-logo { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
+.cartao-login .aviso-acesso { margin-top: 0; }

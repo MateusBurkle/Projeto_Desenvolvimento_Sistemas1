@@ -1,0 +1,47 @@
+.cardcompra{
+
+width: 40%;
+height: 60%;
+margin: 60px;
+}
+
+#mymain2{
+    display: flex;
+    justify-content: space-around;
+}
+
+#informacoes{
+    margin-top: 60px;
+    margin-right: 50px;
+    width: 50%;
+    flex-wrap: wrap;
+}
+#informacoes h1{
+    text-align: center;
+    padding: 15px;
+}
+
+#informacoes p{
+    width: 60%;
+}
+
+#informacoesc input{
+   
+    width: 30%;
+    height: 50px;
+}
+
+#botaocomprar input{
+    display: flex;
+    margin: 60px;
+    justify-content: center;
+    width: 80%;
+    transition: transform 0.3s ease;
+}
+
+#botaocomprar input:hover{
+    font-weight: bold;
+    color: black;
+    background-color: #7ED957;
+    transform: scale(1.1);
+}

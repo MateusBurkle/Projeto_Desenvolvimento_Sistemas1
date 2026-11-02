@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<!-- UC06 Manter cadastro de parceiros; RF10; RN03, RN10; RNF04, RNF05.
+     Fluxo principal: Novo parceiro -> escolher organização ativa sem parceria, atuação e situação -> salvar.
+     FA1 consultar/alterar a atuação (a organização não pode ser trocada), FA2 desativar/reativar com confirmação (RN10).
+     FE1 dados inválidos, FE2 atuação incompatível (Empresa Doadora exige organização do tipo Empresa Doadora),
+     FE3 organização inativa ou já vinculada.
+     Só o Administrador (RN03: o Funcionário não acessa; a API e o layout negam os demais). -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeafTi - Parceiros</title>
+  <link rel="shortcut icon" href="../../images/logosemfundo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/identidade.css">
+  <link rel="stylesheet" href="../../css/app.css">
+  <link rel="stylesheet" href="../../css/usuarios.css">
+  <link rel="stylesheet" href="../../css/organizacoes.css">
+</head>
+<body class="app">
+  <a class="pular-conteudo" href="#conteudo-app">Pular para o conteúdo</a>
+  <header id="app-cabecalho"></header>
+
+  <main class="container py-4" id="conteudo-app" tabindex="-1" hidden>
+    <div id="area-parceiros">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h2 m-0">Parceiros</h1>
+        <button type="button" class="btn btn-success fw-semibold" id="btn-novo">+ Novo parceiro</button>
+      </div>
+
+      <div id="mensagem" class="alert d-none" aria-live="polite"></div>
+
+      <section class="cartao-app mb-3" aria-labelledby="titulo-filtros">
+        <h2 class="h5" id="titulo-filtros">Filtrar parceiros</h2>
+        <form id="form-filtros" class="row g-3 align-items-end" novalidate>
+          <div class="col-12 col-md-6 col-xl-4">
+            <label class="form-label" for="filtro-q">Nome ou CNPJ da organização</label>
+            <input type="search" class="form-control" id="filtro-q" maxlength="150" placeholder="Digite parte do nome ou do CNPJ">
+          </div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <label class="form-label" for="filtro-atuacao">Atuação</label>
+            <select class="form-select" id="filtro-atuacao">
+              <option value="">Todas as atuações</option>
+              <option>Empresa Doadora</option>
+              <option>Patrocinador em Potencial</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-6 col-xl-2">
+            <label class="form-label" for="filtro-situacao">Situação</label>
+            <select class="form-select" id="filtro-situacao">
+              <option value="">Todas</option>
+              <option>Ativa</option>
+              <option>Inativa</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-6 col-xl-3 d-flex gap-2">
+            <button type="submit" class="btn btn-success fw-semibold flex-fill">Filtrar</button>
+            <button type="button" class="btn btn-outline-leaf fw-semibold flex-fill" id="btn-limpar">Limpar</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="cartao-app" aria-labelledby="titulo-lista">
+        <h2 class="h5" id="titulo-lista">Lista de parceiros</h2>
+        <p id="estado-lista" class="mb-2" role="status">Carregando...</p>
+        <table class="table table-hover tabela-usuarios mb-3" id="tabela" hidden>
+          <caption class="visually-hidden">Parceiros cadastrados</caption>
+          <thead>
+            <tr><th scope="col">Organização</th><th scope="col">CNPJ</th><th scope="col">Atuação</th><th scope="col">Situação do vínculo</th><th scope="col">Ações</th></tr>
+          </thead>
+          <tbody id="corpo-tabela"></tbody>
+        </table>
+        <nav class="d-flex flex-wrap align-items-center gap-2" aria-label="Paginação da lista" id="paginacao" hidden>
+          <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-anterior">Anterior</button>
+          <span id="texto-pagina" aria-live="polite"></span>
+          <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-proxima">Próxima</button>
+        </nav>
+      </section>
+    </div>
+  </main>
+
+  <!-- Formulário: novo parceiro (UC06 passos 2 e 3) ou alterar atuação (FA1) -->
+  <div class="modal fade" id="modal-form" tabindex="-1" aria-labelledby="modal-form-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+      <div class="modal-content">
+        <form id="form-parceiro" novalidate>
+          <div class="modal-header">
+            <h2 class="modal-title h4" id="modal-form-titulo">Novo parceiro</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          </div>
+          <div class="modal-body">
+            <div id="msg-form" class="alert d-none"></div>
+            <div class="row g-3">
+              <div class="col-12" id="bloco-busca-org">
+                <label class="form-label" for="f-busca-org">Buscar organização</label>
+                <div class="d-flex gap-2">
+                  <input type="search" class="form-control" id="f-busca-org" maxlength="150" autocomplete="off" placeholder="Nome ou CNPJ" aria-describedby="f-busca-dica">
+                  <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-buscar-org">Buscar</button>
+                </div>
+                <div id="f-busca-dica" class="dica-campo">Aparecem apenas organizações ativas que ainda não têm parceria.</div>
+              </div>
+              <div class="col-12" id="bloco-org">
+                <label class="form-label" for="f-org">Organização <span aria-hidden="true">*</span></label>
+                <select class="form-select" id="f-org" aria-describedby="f-org-erro" required>
+                  <option value="">Selecione a organização</option>
+                </select>
+                <div id="f-org-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12" id="bloco-dados-org" hidden>
+                <h3 class="h6">Dados da organização (somente leitura)</h3>
+                <div class="dados-leitura"><dl id="dados-org"></dl></div>
+                <p class="dica-campo mt-1 mb-0" id="dica-dados-org">Para alterar estes dados, use a tela Organizações.</p>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="f-atuacao">Atuação na parceria <span aria-hidden="true">*</span></label>
+                <select class="form-select" id="f-atuacao" aria-describedby="f-atuacao-dica f-atuacao-erro" required>
+                  <option value="">Selecione a atuação</option>
+                  <option>Empresa Doadora</option>
+                  <option>Patrocinador em Potencial</option>
+                </select>
+                <div id="f-atuacao-dica" class="dica-campo">Empresa Doadora exige organização do tipo Empresa Doadora. Patrocinador em Potencial vale para qualquer tipo.</div>
+                <div id="f-atuacao-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6" id="bloco-situacao-nova">
+                <label class="form-label" for="f-situacao">Situação do vínculo</label>
+                <select class="form-select" id="f-situacao" aria-describedby="f-situacao-erro">
+                  <option>Ativa</option>
+                  <option>Inativa</option>
+                </select>
+                <div id="f-situacao-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6" id="bloco-situacao-atual" hidden>
+                <p class="mb-0"><strong>Situação do vínculo:</strong> <span id="situacao-atual"></span></p>
+                <p class="dica-campo mb-0">Para mudar, use Desativar ou Reativar na lista.</p>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-leaf fw-semibold" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-success fw-semibold" id="btn-salvar">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmação de desativar/reativar (UC06 FA2, RN10); foco inicial no Cancelar -->
+  <div class="modal fade" id="modal-situacao" tabindex="-1" aria-labelledby="modal-situacao-titulo" aria-describedby="modal-situacao-texto" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title h4" id="modal-situacao-titulo">Desativar parceria</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div id="msg-situacao" class="alert d-none"></div>
+          <p id="modal-situacao-texto" class="mb-0"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-leaf fw-semibold" data-bs-dismiss="modal" id="btn-nao-situacao">Cancelar</button>
+          <button type="button" class="btn btn-success fw-semibold" id="btn-confirmar-situacao">Sim, desativar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">LEAF TI &middot; Informação Sustentável</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="../../js/api.js"></script>
+  <script src="../../js/layout.js"></script>
+  <script src="../../js/usuarios-comum.js"></script>
+  <script src="../../js/organizacoes-comum.js"></script>
+  <script src="../../js/parceiros.js"></script>
+</body>
+</html>

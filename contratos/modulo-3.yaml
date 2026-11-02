@@ -1,0 +1,608 @@
+openapi: 3.0.3
+info:
+  title: LEAF TI - Módulo 3 - Equipamentos e categorias
+  version: 1.0.0
+  description: |
+    UC05 Manter categorias de equipamentos; UC07 Manter cadastro de equipamentos; UC08 Atualizar situação do equipamento.
+    Requisitos: RF07, RF08, RF11, RF12; RN01, RN07, RN08, RN11, RN12 (RN13/RN14/RN21 como regras de borda); RNF04, RNF05.
+    Spec: especificacoes/modulo-3.md.
+    STATUS: APROVADO em 2026-10-30 pelo usuário (DP-30 opção A e DP-31 a DP-37). Documento e modelos de dados atualizados pelo Cowork (docs/EDICAO_COWORK_M3.md) e conferidos; `EQUIPAMENTO.ativo` aplicado em banco/Codigo_Modelo_Fisico.sql. Bancos existentes recebem a coluna por migração na inicialização.
+
+    Convenções (docs/CONVENCOES.md): prefixo /api/v1, JSON, Bearer, erro {codigo, mensagem, campos}, listagens {items,total,page,size}.
+    Campos com o nome das colunas. Datas ISO 8601 (AAAA-MM-DD). Valores monetários com no máximo 2 casas decimais.
+
+    Regras comuns (todas no service):
+    - Categoria: `nome` 1 a 80, sem espaços nas pontas, único sem diferenciar maiúsculas/minúsculas (DP-31); criada Ativa (UC05 passo 4).
+      As seis categorias base (Computadores, Notebooks, Monitores, Periféricos, Placas de vídeo, Placas-mãe) são criadas na
+      inicialização do banco se ainda não existirem (RF08) e são PROTEGIDAS: não podem ser desativadas nem renomeadas
+      -> 422 CATEGORIA_PROTEGIDA (UC05 passo 6, "manter pelo menos estas seis"; DP-31).
+    - Equipamento: `identificacao` 1 a 50, sem espaços nas pontas, única sem diferenciar caixa (409 IDENTIFICACAO_DUPLICADA, FE1);
+      `modelo` 1 a 150; `origem` 1 a 100 (texto livre, DP-33); `condicao` um de: A avaliar, Bom, Regular, Necessita reparo,
+      Sem condições de reuso (DP-32); `data_recebimento` data ISO não futura; `valor` opcional, >= 0, até 2 casas decimais.
+    - Categoria do equipamento (RN08): na criação e quando `id_categoria` muda, a categoria precisa existir e estar Ativa
+      (422 CATEGORIA_INVALIDA). Uma categoria desativada já vinculada pode permanecer (UC07 FA1).
+    - `id_item_solicitacao` é opcional (UC07 passo 4); se informado precisa existir (422 ITEM_SOLICITACAO_INVALIDO). O cadastro de
+      solicitações é do Módulo 4; até lá o campo só aceita ids existentes (DP-33).
+      DP-52: o vínculo não pode fazer o item ter mais equipamentos do que a sua `quantidade`; caso contrário, 422 ITEM_COMPLETO
+      (campos: {id_item_solicitacao}), sem gravar nada. No PUT, só é verificado quando o item muda. Verificado logo após
+      ITEM_SOLICITACAO_INVALIDO e antes de IDENTIFICACAO_DUPLICADA.
+    - Situações (RF12): Recebido, Em avaliação, Em manutenção, Recondicionado, Disponível, Vendido, Doado, Destinado à reciclagem
+      (valores exatos do CHECK do banco). Regras de transição (DP-35, RN12, UC08 FE1/FE2):
+        * 'Vendido' NÃO pode ser definido por esta API; é efeito da confirmação da venda (RN14, Módulo 5) -> 422 TRANSICAO_INVALIDA;
+        * 'Vendido', 'Doado' e 'Destinado à reciclagem' são finais: depois deles a situação não muda -> 422 TRANSICAO_INVALIDA;
+        * condicao 'Sem condições de reuso': só aceita Recebido, Em avaliação ou Destinado à reciclagem -> 422 SEM_CONDICOES_DE_REUSO
+          (UC08 FE2, UC11 FE2, RN12);
+        * 'Disponível' exige condicao diferente de 'A avaliar' e de 'Sem condições de reuso', `valor` > 0 e equipamento ativo
+          -> 422 TRANSICAO_INVALIDA com campos indicando o que falta;
+        * 'Doado' exige condição que permita reuso (mesmos critérios), equipamento ativo, `id_organizacao_ong` de uma organização
+          do tipo 'Cliente ONG' com situacao 'Ativa' e `data_doacao` ISO não futura e não anterior à data_recebimento; grava a linha
+          em DOACAO na mesma transação -> 422 DOACAO_INVALIDA (UC08 FE1, UC11 FE1);
+        * as demais mudanças entre situações não finais são livres.
+    - Equipamento com situação 'Vendido' ou 'Doado' fica somente leitura (histórico): PUT/PATCH retornam 422 EQUIPAMENTO_FINALIZADO.
+    - Equipamento inativo (UC07 FA2, DP-30 opção A): continua consultável e editável nos dados descritivos, mas não pode receber
+      as situações 'Disponível' nem 'Doado' (impede novas vendas e destinações; 422 EQUIPAMENTO_INATIVO) e sai do catálogo (Módulo 5).
+servers:
+  - url: /api/v1
+
+tags:
+  - name: Categorias
+  - name: Equipamentos
+
+paths:
+  /categorias:
+    get:
+      tags: [Categorias]
+      operationId: listarCategorias
+      summary: Listar categorias (UC05 FA1; apoio ao UC07 passo 2)
+      description: |
+        Perfis autorizados: Administrador e Funcionário (o Funcionário precisa das categorias para cadastrar equipamentos; RF08).
+        Filtros: `ativa` (true/false) e `q` (nome, sem diferenciar caixa). Ordenado por nome. Paginação padrão (size máx. 100).
+        Cada item traz `total_equipamentos` e `protegida`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: ativa, in: query, schema: { type: boolean } }
+        - { name: q, in: query, schema: { type: string, maxLength: 80 } }
+      responses:
+        '200':
+          description: Página de categorias.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginaCategorias' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+    post:
+      tags: [Categorias]
+      operationId: criarCategoria
+      summary: Cadastrar categoria (UC05 fluxo principal)
+      description: |
+        Perfis autorizados: Administrador (RF07). Valida nome (400), duplicidade (409 NOME_CATEGORIA_DUPLICADO), grava Ativa (201).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoriaEntrada' }
+            example: { nome: Servidores }
+      responses:
+        '201':
+          description: Categoria criada e ativa.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Categoria' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '409': { $ref: '#/components/responses/NomeCategoriaDuplicado' }
+
+  /categorias/{id_categoria}:
+    parameters:
+      - { name: id_categoria, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Categorias]
+      operationId: obterCategoria
+      summary: Consultar categoria (UC05 FA1)
+      description: 'Perfis autorizados: Administrador e Funcionário. Inexistente -> 404 NAO_ENCONTRADO.'
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Categoria.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Categoria' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+    put:
+      tags: [Categorias]
+      operationId: alterarCategoria
+      summary: Alterar nome da categoria (UC05 FA1)
+      description: |
+        Perfis autorizados: Administrador. Altera só o nome; os vínculos com equipamentos são preservados (o id não muda).
+        Categoria protegida (as seis base) -> 422 CATEGORIA_PROTEGIDA. Nome duplicado -> 409. Ordem: 400 -> 404 -> 422 -> 409.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoriaEntrada' }
+      responses:
+        '200':
+          description: Categoria atualizada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Categoria' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '409': { $ref: '#/components/responses/NomeCategoriaDuplicado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /categorias/{id_categoria}/situacao:
+    parameters:
+      - { name: id_categoria, in: path, required: true, schema: { type: integer } }
+    patch:
+      tags: [Categorias]
+      operationId: alterarSituacaoCategoria
+      summary: Desativar ou reativar categoria (UC05 FA2, RN07)
+      description: |
+        Perfis autorizados: Administrador. Desativar impede novas seleções e preserva os vínculos existentes (RN07, RN08); NÃO há
+        exclusão física. Categoria protegida não pode ser desativada (422 CATEGORIA_PROTEGIDA). Idempotente. O front pede confirmação.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoriaSituacao' }
+            example: { ativa: false }
+      responses:
+        '200':
+          description: Categoria atualizada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Categoria' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /equipamentos:
+    get:
+      tags: [Equipamentos]
+      operationId: listarEquipamentos
+      summary: Listar equipamentos (UC07 FA1)
+      description: |
+        Perfis autorizados: Administrador e Funcionário (RF11). Demais perfis -> 403 SEM_PERMISSAO (o catálogo para Cliente Empresa é do Módulo 5).
+        Filtros: `id_categoria`, `situacao`, `condicao`, `ativo`, `q` (identificação ou modelo, sem caixa),
+        `data_recebimento_de` e `data_recebimento_ate` (inclusivos). Ordenado por data_recebimento desc, depois identificacao.
+        Paginação padrão (size máx. 100).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: id_categoria, in: query, schema: { type: integer } }
+        - { name: situacao, in: query, schema: { $ref: '#/components/schemas/Situacao' } }
+        - { name: condicao, in: query, schema: { $ref: '#/components/schemas/Condicao' } }
+        - { name: ativo, in: query, schema: { type: boolean } }
+        - { name: q, in: query, schema: { type: string, maxLength: 150 } }
+        - { name: data_recebimento_de, in: query, schema: { type: string, format: date } }
+        - { name: data_recebimento_ate, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Página de equipamentos.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginaEquipamentos' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+    post:
+      tags: [Equipamentos]
+      operationId: criarEquipamento
+      summary: Cadastrar equipamento (UC07 fluxo principal)
+      description: |
+        Perfis autorizados: Administrador e Funcionário (RF11).
+        Ordem: 400 (campos/formatos) -> 422 CATEGORIA_INVALIDA -> 422 ITEM_SOLICITACAO_INVALIDO -> 409 IDENTIFICACAO_DUPLICADA ->
+        regras de situação (422). `situacao` opcional, padrão 'Recebido'; na criação não aceita 'Vendido' nem 'Doado'
+        (use PATCH /situacao). Nasce ativo. Nada é gravado em erro (UC07 FE1).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EquipamentoCriar' }
+            example:
+              identificacao: NB-0001
+              id_categoria: 2
+              modelo: Dell Latitude 5420
+              condicao: Bom
+              origem: Empresa Doadora Alfa
+              data_recebimento: "2026-10-20"
+              valor: 1500.00
+              situacao: Em avaliação
+      responses:
+        '201':
+          description: Equipamento cadastrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Equipamento' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '409': { $ref: '#/components/responses/IdentificacaoDuplicada' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /equipamentos/{id_equipamento}:
+    parameters:
+      - { name: id_equipamento, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Equipamentos]
+      operationId: obterEquipamento
+      summary: Consultar equipamento (UC07 FA1)
+      description: 'Perfis autorizados: Administrador e Funcionário. Inexistente -> 404 NAO_ENCONTRADO. Traz a doação quando a situação é Doado.'
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Equipamento.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Equipamento' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+    put:
+      tags: [Equipamentos]
+      operationId: alterarEquipamento
+      summary: Alterar dados do equipamento (UC07 FA1)
+      description: |
+        Perfis autorizados: Administrador e Funcionário. Altera identificacao, id_categoria, modelo, condicao, origem,
+        data_recebimento, valor e id_item_solicitacao; NÃO altera a situação (use PATCH /situacao) nem `ativo`.
+        DP-53: se `id_item_solicitacao` for OMITIDO, o vínculo atual é preservado; `null` explícito desvincula o equipamento
+        (a situação da solicitação do item antigo e do novo é recalculada).
+        id_categoria só é validado como ATIVA quando muda (UC07 FA1, RN08). Identificação revalidada excluindo o próprio registro.
+        Mudar `condicao` para 'Sem condições de reuso' só é aceito com situação Recebido, Em avaliação ou Destinado à reciclagem
+        (422 SEM_CONDICOES_DE_REUSO); equipamentos 'Vendido' ou 'Doado' -> 422 EQUIPAMENTO_FINALIZADO. Se o equipamento está
+        'Disponível', `valor` deve continuar > 0 e a condição apta.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EquipamentoAlterar' }
+      responses:
+        '200':
+          description: Equipamento atualizado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Equipamento' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '409': { $ref: '#/components/responses/IdentificacaoDuplicada' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /equipamentos/{id_equipamento}/situacao:
+    parameters:
+      - { name: id_equipamento, in: path, required: true, schema: { type: integer } }
+    patch:
+      tags: [Equipamentos]
+      operationId: atualizarSituacaoEquipamento
+      summary: Atualizar situação (UC08; reaproveitado por UC10/UC11 no Módulo 4)
+      description: |
+        Perfis autorizados: Administrador e Funcionário (RF12). Aplica as regras de transição descritas no topo.
+        Se `situacao` = 'Doado', `id_organizacao_ong` e `data_doacao` são obrigatórios e a linha de DOACAO é gravada na mesma
+        transação que a mudança de situação (UC08 FE1: sem esses dados, nada muda). Para as demais situações, esses campos devem
+        estar ausentes (enviados -> 400). Ordem: 400 -> 404 -> 422 (finalizado, transição, condição, ativo, doação).
+        Idempotente quando a situação pedida já é a atual e não é final (200).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SituacaoEntrada' }
+            examples:
+              disponivel: { value: { situacao: Disponível } }
+              doado: { value: { situacao: Doado, id_organizacao_ong: 7, data_doacao: "2026-10-30" } }
+      responses:
+        '200':
+          description: Situação atualizada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Equipamento' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /equipamentos/{id_equipamento}/ativo:
+    parameters:
+      - { name: id_equipamento, in: path, required: true, schema: { type: integer } }
+    patch:
+      tags: [Equipamentos]
+      operationId: alterarAtivoEquipamento
+      summary: Desativar ou reativar equipamento (UC07 FA2) - OPÇÃO A da DP-30
+      description: |
+        Perfis autorizados: Administrador e Funcionário (UC07 atores). Desativar preserva o histórico e impede novas vendas e
+        destinações; reativar volta a permitir. Equipamentos 'Vendido' ou 'Doado' não mudam (422 EQUIPAMENTO_FINALIZADO).
+        Idempotente. O front pede confirmação. Exige a coluna `ativo` em EQUIPAMENTO (alteração do modelo, DP-30).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AtivoEntrada' }
+            example: { ativo: false }
+      responses:
+        '200':
+          description: Equipamento atualizado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Equipamento' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /equipamentos/{id_equipamento}/imagem:
+    parameters:
+      - { name: id_equipamento, in: path, required: true, schema: { type: integer } }
+    put:
+      tags: [Equipamentos]
+      operationId: enviarImagemEquipamento
+      summary: Anexar ou substituir a imagem do equipamento (UC07; DP-84 a DP-87)
+      description: |
+        Perfis autorizados: Administrador e Funcionário (demais 403). multipart/form-data com o campo `arquivo`. Uma imagem por equipamento.
+        Validação PELO CONTEÚDO (assinatura do arquivo): JPEG (FF D8 FF), PNG (89 50 4E 47 0D 0A 1A 0A) ou WebP (RIFF....WEBP); extensão e Content-Type
+        enviados pelo cliente são ignorados. Tamanho máximo 2 MB (2.097.152 bytes): acima -> 422 IMAGEM_MUITO_GRANDE
+        ("A imagem deve ter no máximo 2 MB."); outro tipo ou arquivo corrompido -> 422 IMAGEM_TIPO_INVALIDO
+        ("Envie uma imagem JPG, PNG ou WebP."); sem o campo -> 400 DADOS_INVALIDOS. Equipamento inexistente -> 404 NAO_ENCONTRADO.
+        Equipamento que o PUT /equipamentos/{id} não deixa alterar (Vendido/Doado) também não aceita imagem (mesmo código de erro do PUT).
+        Nome do arquivo gerado pelo sistema: <uuid4 hex de 32 caracteres>.<jpg|png|webp>, extensão decidida pelo tipo detectado; nunca o nome
+        original nem caminho do cliente. Gravação atômica (arquivo temporário + rename); só depois de gravar o novo atualiza EQUIPAMENTO.imagem e
+        apaga o arquivo antigo (se falhar o banco, o novo é apagado). Resposta 200 = Equipamento com `imagem` e `imagem_url`.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { type: object, required: [arquivo], properties: { arquivo: { type: string, format: binary } } }
+      responses:
+        '200': { description: Equipamento atualizado. }
+        '400': { description: DADOS_INVALIDOS. }
+        '401': { description: NAO_AUTENTICADO. }
+        '403': { description: SEM_PERMISSAO. }
+        '404': { description: NAO_ENCONTRADO. }
+        '422': { description: "IMAGEM_MUITO_GRANDE, IMAGEM_TIPO_INVALIDO ou bloqueio de alteração." }
+    delete:
+      tags: [Equipamentos]
+      operationId: removerImagemEquipamento
+      summary: Remover a imagem do equipamento (DP-84, DP-86)
+      description: |
+        Administrador e Funcionário. Apaga o arquivo e põe EQUIPAMENTO.imagem = NULL. Sem imagem: 204 (idempotente). 404 se o equipamento não existe.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Imagem removida (ou já inexistente). }
+        '403': { description: SEM_PERMISSAO. }
+        '404': { description: NAO_ENCONTRADO. }
+
+  /imagens/equipamentos/{nome_arquivo}:
+    get:
+      tags: [Imagens]
+      operationId: obterArquivoImagemEquipamento
+      summary: Arquivo estático da imagem (público, sem login)
+      description: |
+        Serve só o arquivo, como imagem (Content-Type pelo tipo detectado, `X-Content-Type-Options: nosniff`). `nome_arquivo` precisa casar com
+        ^[0-9a-f]{32}\.(jpg|png|webp)$; qualquer outro valor (inclusive `..`, `/`, `\`) -> 404. Nunca lista diretório, nunca executa nem interpreta o arquivo.
+      responses:
+        '200': { description: Imagem. }
+        '404': { description: Não encontrada. }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  responses:
+    NaoAutenticado:
+      description: Token ausente, inválido ou expirado (NAO_AUTENTICADO).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    SemPermissao:
+      description: Perfil sem autorização (SEM_PERMISSAO) ou conta inativa (CONTA_INATIVA).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example: { codigo: SEM_PERMISSAO, mensagem: Você não tem permissão para esta operação., campos: {} }
+    DadosInvalidos:
+      description: Campos obrigatórios ausentes ou formato inválido (DADOS_INVALIDOS; UC07 FE1, RNF04).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example:
+            codigo: DADOS_INVALIDOS
+            mensagem: Dados inválidos. Corrija os campos indicados.
+            campos: { valor: no máximo 2 casas decimais }
+    NaoEncontrado:
+      description: Registro inexistente (NAO_ENCONTRADO).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    NomeCategoriaDuplicado:
+      description: Já existe categoria com esse nome (NOME_CATEGORIA_DUPLICADO).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example: { codigo: NOME_CATEGORIA_DUPLICADO, mensagem: Já existe uma categoria com este nome., campos: { nome: duplicado } }
+    IdentificacaoDuplicada:
+      description: Identificação já usada por outro equipamento (IDENTIFICACAO_DUPLICADA; UC07 FE1).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example: { codigo: IDENTIFICACAO_DUPLICADA, mensagem: Esta identificação já está em uso., campos: { identificacao: duplicada } }
+    RegraViolada:
+      description: |
+        Regra de negócio violada: CATEGORIA_INVALIDA, CATEGORIA_PROTEGIDA, ITEM_SOLICITACAO_INVALIDO, TRANSICAO_INVALIDA,
+        SEM_CONDICOES_DE_REUSO, DOACAO_INVALIDA, EQUIPAMENTO_INATIVO, EQUIPAMENTO_FINALIZADO, ITEM_COMPLETO (DP-52).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example:
+            codigo: SEM_CONDICOES_DE_REUSO
+            mensagem: Equipamento sem condições de reuso só pode ser encaminhado à reciclagem.
+            campos: { situacao: não permitida para este equipamento }
+
+  schemas:
+    Situacao:
+      type: string
+      enum: [Recebido, Em avaliação, Em manutenção, Recondicionado, Disponível, Vendido, Doado, Destinado à reciclagem]
+    Condicao:
+      type: string
+      enum: [A avaliar, Bom, Regular, Necessita reparo, Sem condições de reuso]
+    CategoriaEntrada:
+      type: object
+      required: [nome]
+      properties:
+        nome: { type: string, minLength: 1, maxLength: 80 }
+    CategoriaSituacao:
+      type: object
+      required: [ativa]
+      properties:
+        ativa: { type: boolean }
+    Categoria:
+      type: object
+      required: [id_categoria, nome, ativa, protegida, total_equipamentos]
+      properties:
+        id_categoria: { type: integer }
+        nome: { type: string }
+        ativa: { type: boolean }
+        protegida: { type: boolean, description: Uma das seis categorias base (RF08); não pode ser desativada nem renomeada. }
+        total_equipamentos: { type: integer }
+    PaginaCategorias:
+      type: object
+      required: [items, total, page, size]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Categoria' } }
+        total: { type: integer }
+        page: { type: integer }
+        size: { type: integer }
+    EquipamentoCriar:
+      type: object
+      required: [identificacao, id_categoria, modelo, condicao, origem, data_recebimento]
+      properties:
+        identificacao: { type: string, minLength: 1, maxLength: 50 }
+        id_categoria: { type: integer }
+        modelo: { type: string, minLength: 1, maxLength: 150 }
+        condicao: { $ref: '#/components/schemas/Condicao' }
+        origem: { type: string, minLength: 1, maxLength: 100 }
+        data_recebimento: { type: string, format: date }
+        valor: { type: number, nullable: true, minimum: 0 }
+        id_item_solicitacao: { type: integer, nullable: true }
+        situacao: { allOf: [{ $ref: '#/components/schemas/Situacao' }], default: Recebido, description: Não aceita Vendido nem Doado na criação. }
+    EquipamentoAlterar:
+      type: object
+      required: [identificacao, id_categoria, modelo, condicao, origem, data_recebimento]
+      properties:
+        identificacao: { type: string, minLength: 1, maxLength: 50 }
+        id_categoria: { type: integer }
+        modelo: { type: string, minLength: 1, maxLength: 150 }
+        condicao: { $ref: '#/components/schemas/Condicao' }
+        origem: { type: string, minLength: 1, maxLength: 100 }
+        data_recebimento: { type: string, format: date }
+        valor: { type: number, nullable: true, minimum: 0 }
+        id_item_solicitacao: { type: integer, nullable: true }
+    SituacaoEntrada:
+      type: object
+      required: [situacao]
+      properties:
+        situacao: { $ref: '#/components/schemas/Situacao' }
+        id_organizacao_ong: { type: integer, description: Obrigatório somente quando situacao = Doado. }
+        data_doacao: { type: string, format: date, description: Obrigatório somente quando situacao = Doado. }
+    AtivoEntrada:
+      type: object
+      required: [ativo]
+      properties:
+        ativo: { type: boolean }
+    Doacao:
+      type: object
+      required: [id_doacao, id_organizacao_ong, nome_ong, data_doacao]
+      properties:
+        id_doacao: { type: integer }
+        id_organizacao_ong: { type: integer }
+        nome_ong: { type: string }
+        data_doacao: { type: string, format: date }
+    Equipamento:
+      type: object
+      required: [id_equipamento, identificacao, id_categoria, nome_categoria, categoria_ativa, modelo, condicao, origem, situacao, data_recebimento, valor, id_item_solicitacao, ativo, doacao]
+      properties:
+        id_equipamento: { type: integer }
+        identificacao: { type: string }
+        id_categoria: { type: integer }
+        nome_categoria: { type: string }
+        categoria_ativa: { type: boolean }
+        modelo: { type: string }
+        condicao: { $ref: '#/components/schemas/Condicao' }
+        origem: { type: string }
+        situacao: { $ref: '#/components/schemas/Situacao' }
+        data_recebimento: { type: string, format: date }
+        valor: { type: number, nullable: true }
+        id_item_solicitacao: { type: integer, nullable: true }
+        ativo: { type: boolean }
+        doacao: { allOf: [{ $ref: '#/components/schemas/Doacao' }], nullable: true }
+    PaginaEquipamentos:
+      type: object
+      required: [items, total, page, size]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Equipamento' } }
+        total: { type: integer }
+        page: { type: integer }
+        size: { type: integer }
+    Erro:
+      type: object
+      required: [codigo, mensagem, campos]
+      properties:
+        codigo: { type: string }
+        mensagem: { type: string }
+        campos: { type: object, additionalProperties: { type: string } }
+
+# Matriz de permissões por rota (RN01, RF07, RF11, RF12, RNF05)
+x-permissoes:
+  PUT    /equipamentos/{id}/imagem: [Administrador, Funcionário]   # DP-85
+  DELETE /equipamentos/{id}/imagem: [Administrador, Funcionário]   # DP-85
+  GET    /imagens/equipamentos/{nome_arquivo}: [público]
+  GET   /categorias: [Administrador, Funcionário]
+  POST  /categorias: [Administrador]
+  GET   /categorias/{id}: [Administrador, Funcionário]
+  PUT   /categorias/{id}: [Administrador]
+  PATCH /categorias/{id}/situacao: [Administrador]
+  GET   /equipamentos: [Administrador, Funcionário]
+  POST  /equipamentos: [Administrador, Funcionário]
+  GET   /equipamentos/{id}: [Administrador, Funcionário]
+  PUT   /equipamentos/{id}: [Administrador, Funcionário]
+  PATCH /equipamentos/{id}/situacao: [Administrador, Funcionário]
+  PATCH /equipamentos/{id}/ativo: [Administrador, Funcionário]
+# Clientes e Empresa Doadora não acessam rotas deste módulo (catálogo e "minhas doações" são dos Módulos 4 e 5).
+# Menu: `categorias` só Administrador; `equipamentos` Administrador e Funcionário (matriz do módulo 0).
+
+x-codigos-erro:
+  IMAGEM_MUITO_GRANDE: "422"   # DP-84
+  IMAGEM_TIPO_INVALIDO: "422"   # DP-84
+  NOME_CATEGORIA_DUPLICADO: "409"
+  IDENTIFICACAO_DUPLICADA: "409"
+  CATEGORIA_INVALIDA: "422"
+  CATEGORIA_PROTEGIDA: "422"
+  ITEM_SOLICITACAO_INVALIDO: "422"
+  ITEM_COMPLETO: "422"
+  TRANSICAO_INVALIDA: "422"
+  SEM_CONDICOES_DE_REUSO: "422"
+  DOACAO_INVALIDA: "422"
+  EQUIPAMENTO_INATIVO: "422"
+  EQUIPAMENTO_FINALIZADO: "422"
+
+# MODELO (DP-87): coluna criada por DDL no back-end (ALTER TABLE EQUIPAMENTO ADD COLUMN imagem TEXT NULL, só se ainda não existir), sem editar
+# banco/Codigo_Modelo_Fisico.sql. EQUIPAMENTO.imagem TEXT NULL = apenas o NOME do arquivo (<uuid4 hex 32>.<jpg|png|webp>); NULL = sem imagem.
+# Resposta Equipamento (GET/POST/PUT): acrescenta `imagem` (string|null) e `imagem_url` (string|null, "/imagens/equipamentos/<nome>").
+# Armazenamento (DP-86): pasta <raiz do projeto>/armazenamento/imagens/equipamentos/ (variável LEAF_IMAGENS_DIR; fora de backend/app e de frontend/),
+# criada na inicialização; entra no .gitignore. Excluir equipamento (se vier a existir) apaga o arquivo; desativar mantém.

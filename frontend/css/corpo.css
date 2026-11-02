@@ -1,0 +1,51 @@
+
+body{
+    width: 100%;
+    background-image: url("/images/gifleaf.gif");
+    background-position: center;
+    background-repeat: no-repeat;
+    height: 100%;
+    padding: 0px;
+    margin: 0px;
+    background-size: cover;
+}
+
+.title h1{
+    text-align: center;
+    padding-top: 50px;
+    font-size: 42px;
+}
+.title h1::after{
+    content: "";
+    height: 4px;    
+    width: 230px;
+    background-color: #000;
+    display: block;
+    margin: auto;
+}
+.services{
+    width: 85%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-direction: column;
+    margin: 0px 20px;
+    padding:20px 20px;
+    background-color: #efefef;
+    border-radius: 10px;
+}
+
+.accordion-item{
+    width: 50%;
+    margin: 40px;
+    
+}
+
+.myaccordion{
+    
+    width: 70%;
+   position: relative;
+   margin: 70px;
+   padding: 20px;
+   left: 25%;
+}

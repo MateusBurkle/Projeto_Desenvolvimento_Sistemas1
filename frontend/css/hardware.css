@@ -1,0 +1,111 @@
+
+#mymain{
+    display: flex;
+}
+aside{
+    padding: 30px;
+    display: block;
+    background-color: #7ED957;
+    width: 20%;
+    height: 100%;
+}
+
+
+
+input[type=text]{
+    color: pink;
+    text-align: center;
+    height: 30px;
+    width: 200px;
+}
+form{
+    display: flex;
+    flex-direction: column;
+    
+    
+}
+
+select{
+    height: 50px;
+    text-align: center;
+}
+.item{
+    padding-top: 15px;
+    padding-bottom: 15px;
+}
+
+
+#checkboxes{
+    font-size: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+}
+
+#cartoes{
+    display: flex;
+
+    justify-content: space-around;
+    flex-wrap: wrap;
+}
+.mycards{
+    display: flex;
+    width: 28%;
+    justify-content: center;
+    margin-top: 50px;
+    margin-left: 50px;
+    height: auto;
+    
+}
+
+
+
+.card-img-top{
+    height: 60%;
+    
+    object-fit: cover;
+}
+
+.card-text{
+    text-align: center;
+    font-weight: bold;
+}
+
+.txtempresa{
+    text-align: justify;
+}
+
+.preco{
+    color: green;
+}
+
+#botoescd{
+    display: flex;
+    text-align: center;
+    justify-content: space-around;
+    
+}
+.mybotoes{
+    text-align: center;
+    width: 45%;
+    transition: transform 0.3s ease;
+    
+}
+
+.mybotoes:hover{
+    color: white;
+    font-weight: bold;
+    background-color: #7ED957;
+    transform: scale(1.1);
+}
+
+
+.modal-header{
+
+    text-align: center;
+    color: white;
+    font-weight: bold;
+    background-color: #7ED957;
+}
+
+

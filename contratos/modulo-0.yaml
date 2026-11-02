@@ -1,0 +1,231 @@
+openapi: 3.0.3
+info:
+  title: LEAF TI - Módulo 0 (Fundação) - Acesso ao sistema
+  version: 1.0.0
+  description: |
+    UC04 Acessar o sistema; UC28 Validar credenciais (include de UC04).
+    Requisitos: RF01; RN01; RNF03, RNF04, RNF05. Spec: especificacoes/modulo-0.md.
+    STATUS: APROVADO em 2026-10-30 (DP-01 a DP-05 resolvidas em docs/DECISOES_PENDENTES.md).
+
+    Regras gerais (docs/CONVENCOES.md): prefixo /api/v1, JSON, Authorization Bearer, erro padrão
+    {codigo, mensagem, campos}. Login por e-mail e senha; e-mail único; senha somente como hash bcrypt (RNF03);
+    o login não realiza cadastro (RF01).
+servers:
+  - url: /api/v1
+
+tags:
+  - name: Acesso
+
+paths:
+  /auth/login:
+    post:
+      tags: [Acesso]
+      operationId: login
+      summary: Entrar no sistema (UC04, que inclui UC28)
+      description: |
+        Perfis autorizados: público (sem token).
+        Fluxo (UC28): 1) consulta a conta pelo e-mail; 2) compara a senha com o hash (bcrypt);
+        3) se válida e a conta ativa, retorna sucesso e o token JWT (UC04, passo 4).
+        Conta ativa (DP-02, proposta): Administrador/Funcionário (sem organização) sempre ativos;
+        demais perfis exigem organização vinculada com situação ativa (DP-03).
+        O e-mail é comparado sem diferenciar maiúsculas/minúsculas e sem espaços nas pontas.
+        Falhas (DP-05, proposta):
+          - e-mail inexistente OU senha incorreta -> 401 CREDENCIAIS_INVALIDAS (mesma resposta, UC04 FE1 / UC28 FE1);
+          - senha correta, mas conta/organização inativa -> 403 CONTA_INATIVA (UC04 FE2 / UC28 FE1).
+        Nenhuma sessão/token é emitido em caso de falha. A senha nunca é devolvida nem registrada em log.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginEntrada'
+            example:
+              email: admin@exemplo.com
+              senha: "SenhaForte123"
+      responses:
+        '200':
+          description: Sessão iniciada (UC04 fluxo principal passo 4).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginSaida'
+        '400':
+          description: E-mail ou senha ausentes/formato inválido (RNF04).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Erro' }
+              example:
+                codigo: DADOS_INVALIDOS
+                mensagem: Dados inválidos. Corrija os campos indicados.
+                campos: { email: formato inválido }
+        '401':
+          description: Credenciais inválidas (UC04 FE1).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Erro' }
+              example:
+                codigo: CREDENCIAIS_INVALIDAS
+                mensagem: Não foi possível entrar. Verifique o e-mail e a senha.
+                campos: {}
+        '403':
+          description: Conta ou organização inativa (UC04 FE2).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Erro' }
+              example:
+                codigo: CONTA_INATIVA
+                mensagem: Acesso negado. A conta ou a organização está inativa.
+                campos: {}
+
+  /auth/me:
+    get:
+      tags: [Acesso]
+      operationId: usuarioAtual
+      summary: Dados da sessão e funcionalidades do perfil (UC04 passo 4; RN01)
+      description: |
+        Perfis autorizados: Administrador, Funcionário, Cliente Empresa, Cliente ONG, Empresa Doadora (qualquer usuário autenticado).
+        Reavalia a conta a cada chamada: se a organização foi desativada depois do login, responde 403 CONTA_INATIVA (RN06, RN09).
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Usuário autenticado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UsuarioSessao' }
+        '401':
+          description: Token ausente, inválido ou expirado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Erro' }
+              example:
+                codigo: NAO_AUTENTICADO
+                mensagem: Sessão inválida ou expirada. Entre novamente.
+                campos: {}
+        '403':
+          description: Conta ou organização inativa.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Erro' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token JWT assinado (HS256) emitido no login. Claims: sub = id_usuario, perfil, id_organizacao, iat, exp.
+        Validade: 60 minutos, sem refresh (DP-04, proposta). Logout = descartar o token no front-end.
+        Em toda rota protegida: sem token/inválido -> 401 NAO_AUTENTICADO; perfil não autorizado -> 403 SEM_PERMISSAO (RN01, RNF05).
+
+  schemas:
+    Perfil:
+      type: string
+      description: Valores iguais ao CHECK de USUARIO.perfil.
+      enum: [Administrador, Funcionário, Cliente Empresa, Cliente ONG, Empresa Doadora]
+
+    LoginEntrada:
+      type: object
+      required: [email, senha]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        senha:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 128
+
+    LoginSaida:
+      type: object
+      required: [access_token, token_type, expires_in, usuario]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, enum: [bearer] }
+        expires_in: { type: integer, description: Segundos de validade, example: 3600 }
+        usuario: { $ref: '#/components/schemas/UsuarioSessao' }
+
+    UsuarioSessao:
+      type: object
+      description: Nunca inclui senha ou senha_hash (RNF03).
+      required: [id_usuario, nome, email, perfil, id_organizacao, funcionalidades]
+      properties:
+        id_usuario: { type: integer }
+        nome: { type: string }
+        email: { type: string, format: email }
+        perfil: { $ref: '#/components/schemas/Perfil' }
+        id_organizacao:
+          type: integer
+          nullable: true
+          description: Nulo para Administrador e Funcionário.
+        funcionalidades:
+          type: array
+          description: Chaves de menu autorizadas ao perfil (matriz abaixo). Serve apenas para o front-end montar o menu; a API sempre revalida (RNF05).
+          items: { type: string }
+
+    Erro:
+      type: object
+      required: [codigo, mensagem, campos]
+      properties:
+        codigo: { type: string, example: CREDENCIAIS_INVALIDAS }
+        mensagem: { type: string, description: Em português. }
+        campos:
+          type: object
+          additionalProperties: { type: string }
+
+# Matriz de perfis -> funcionalidades (RN01..RN05). Fonte: RF02-RF21 do documento.
+# Cada módulo seguinte detalha a permissão por rota no seu próprio contrato.
+x-matriz-funcionalidades:
+  Administrador:
+    - usuarios            # RF02, RN02
+    - organizacoes        # RF06, RF09
+    - parceiros           # RF10
+    - categorias          # RF07
+    - equipamentos        # RF11, RF12
+    - solicitacoes        # RF21 (analisar)
+    - vendas              # RF13, RF15
+    - notas_fiscais       # RF19, RF20 (somente Administrador emite)
+    - relatorios          # RF16, RF17, RF18
+    - solicitacoes_doacao # Módulo 7, DP-80
+    - meu_perfil          # DP-101
+  Funcionário:            # RN03: sem usuários, perfis e emissão de nota fiscal
+    - organizacoes        # consultar e alterar dados autorizados (RF09)
+    - equipamentos
+    - solicitacoes
+    - vendas
+    - relatorios
+    - solicitacoes_doacao # Módulo 7, DP-80
+    - meu_perfil          # DP-101
+  Cliente Empresa:       # RN04
+    - catalogo            # consultar catálogo e pedir compra (RF04)
+    - minhas_compras
+    - minhas_notas_fiscais # RF20
+    - usuarios_organizacao # RF02/RN02, só a própria organização
+    - meu_perfil          # DP-99
+  Cliente ONG:           # RN04; não compra (RN13)
+    - minhas_doacoes
+    - solicitacoes_doacao # Módulo 7, DP-80
+    - usuarios_organizacao
+    - meu_perfil          # DP-99
+  Empresa Doadora:       # RN05
+    - minhas_solicitacoes
+    - meu_perfil          # DP-99
+# Observação: a lista exata de chaves por perfil para clientes e doadora é uma interpretação de RF04/RF05;
+# será confirmada rota a rota nos contratos dos módulos 1 a 5.
+# Observação: "usuarios_organizacao" para Empresa Doadora não consta no documento (RN02 cita só Cliente Empresa e Cliente ONG).
+
+# Códigos de erro deste módulo
+x-codigos-erro:
+  DADOS_INVALIDOS: "400"
+  NAO_AUTENTICADO: "401"
+  CREDENCIAIS_INVALIDAS: "401"
+  SEM_PERMISSAO: "403"
+  NAO_ENCONTRADO: "404"
+  METODO_NAO_PERMITIDO: "405"
+  ERRO_INTERNO: "500"
+  ERRO_HTTP: "outros status HTTP não mapeados"
+  CONTA_INATIVA: "403"

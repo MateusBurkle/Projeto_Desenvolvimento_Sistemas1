@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<!-- UC09 Solicitar avaliação de equipamentos e UC20 Consultar solicitações e resultados da avaliação.
+     RF05, RF10, RF21; RN05, RN10, RN21; RNF04, RNF05. Perfil Empresa Doadora (menu `minhas_solicitacoes`). DP-40, DP-43.
+     UC09 fluxo principal: Nova solicitação -> itens (tipo, modelo, quantidade) -> confirmar -> registrada como "Aguardando avaliação".
+     UC09 FA1 consultar solicitação própria. FE1 campos obrigatórios/quantidade inválida; FE2 organização inativa; FE3 parceria ausente ou inativa.
+     UC20 passos 1-4: lista só das solicitações da própria organização, com itens, situação, condições avaliadas e destinação.
+     UC20 FA1: solicitação ainda não avaliada mostra a situação pendente, sem inventar condição nem destinação. FE1: de outra empresa -> acesso negado.
+     Depois de enviada, a solicitação não é editável nem cancelável (DP-43). Registrar não disponibiliza nada para venda ou doação (RN21). -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeafTi - Minhas solicitações</title>
+  <link rel="shortcut icon" href="../../images/logosemfundo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/identidade.css">
+  <link rel="stylesheet" href="../../css/app.css">
+  <link rel="stylesheet" href="../../css/usuarios.css">
+  <link rel="stylesheet" href="../../css/organizacoes.css">
+  <link rel="stylesheet" href="../../css/equipamentos.css">
+  <link rel="stylesheet" href="../../css/solicitacoes.css">
+</head>
+<body class="app">
+  <a class="pular-conteudo" href="#conteudo-app">Pular para o conteúdo</a>
+  <header id="app-cabecalho"></header>
+
+  <main class="container py-4" id="conteudo-app" tabindex="-1" hidden>
+    <div id="area-sol">
+      <div id="mensagem" class="alert d-none" aria-live="polite"></div>
+
+      <!-- Vista 1: lista (UC20 passos 1-3) -->
+      <section id="vista-lista" aria-labelledby="titulo-lista-sol">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h1 class="h2 m-0 vista-titulo" id="titulo-lista-sol">Minhas solicitações</h1>
+          <button type="button" class="btn btn-success fw-semibold" id="btn-nova">+ Nova solicitação</button>
+        </div>
+        <p class="dica-campo">Aqui você acompanha os equipamentos que enviou para avaliação. A LEAF TI avalia a condição de cada unidade e registra a destinação (venda, doação ou reciclagem). O registro não inclui coleta ou transporte.</p>
+
+        <section class="cartao-app mb-3" aria-labelledby="titulo-filtros">
+          <h2 class="h5" id="titulo-filtros">Filtrar solicitações</h2>
+          <form id="form-filtros" class="row g-3 align-items-end" novalidate>
+            <div class="col-12 col-md-6 col-xl-3">
+              <label class="form-label" for="filtro-situacao">Situação</label>
+              <select class="form-select" id="filtro-situacao"><option value="">Todas as situações</option></select>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+              <label class="form-label" for="filtro-de">Enviadas a partir de</label>
+              <input type="date" class="form-control" id="filtro-de" aria-describedby="filtro-de-erro">
+              <div id="filtro-de-erro" class="invalid-feedback"></div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+              <label class="form-label" for="filtro-ate">Enviadas até</label>
+              <input type="date" class="form-control" id="filtro-ate" aria-describedby="filtro-ate-erro">
+              <div id="filtro-ate-erro" class="invalid-feedback"></div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3 d-flex gap-2">
+              <button type="submit" class="btn btn-success fw-semibold flex-fill">Filtrar</button>
+              <button type="button" class="btn btn-outline-leaf fw-semibold flex-fill" id="btn-limpar">Limpar</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="cartao-app" aria-labelledby="titulo-tabela">
+          <h2 class="h5" id="titulo-tabela">Solicitações enviadas</h2>
+          <p id="estado-lista" class="mb-2" role="status">Carregando...</p>
+          <div id="vazio-lista" class="estado-vazio" hidden></div>
+          <div class="table-responsive">
+            <table class="table table-hover tabela-usuarios tabela-equip mb-3" id="tabela" hidden>
+              <caption class="visually-hidden">Minhas solicitações de avaliação</caption>
+              <thead><tr><th scope="col">Solicitação</th><th scope="col">Data</th><th scope="col">Situação</th><th scope="col">Itens</th><th scope="col">Avaliação</th><th scope="col">Ações</th></tr></thead>
+              <tbody id="corpo-tabela"></tbody>
+            </table>
+          </div>
+          <nav class="d-flex flex-wrap align-items-center gap-2" aria-label="Paginação da lista" id="paginacao" hidden>
+            <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-anterior">Anterior</button>
+            <span id="texto-pagina" aria-live="polite"></span>
+            <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-proxima">Próxima</button>
+          </nav>
+        </section>
+      </section>
+
+      <!-- Vista 2: nova solicitação (UC09 passos 1-5) -->
+      <section id="vista-nova" aria-labelledby="titulo-nova" hidden>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h1 class="h2 m-0 vista-titulo" id="titulo-nova">Nova solicitação de avaliação</h1>
+          <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-voltar-nova">Voltar para a lista</button>
+        </div>
+        <form id="form-nova" class="cartao-app" novalidate>
+          <div id="msg-nova" class="alert d-none" aria-live="polite"></div>
+          <p class="dica-campo">Informe tipo, modelo e quantidade dos equipamentos que deseja enviar para avaliação (de 1 a 50 itens). * campo obrigatório. Depois de enviada, a solicitação não pode ser editada nem cancelada. Enviar a solicitação não coloca nada à venda nem em doação: a LEAF TI avalia primeiro.</p>
+          <div id="itens-form"></div>
+          <button type="button" class="btn btn-outline-leaf fw-semibold mb-3" id="btn-add-item">+ Adicionar outro item</button>
+          <div id="msg-limite" class="dica-campo mb-3" hidden>Limite de 50 itens por solicitação.</div>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-success fw-semibold" id="btn-enviar">Confirmar e enviar solicitação</button>
+            <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-cancelar-nova">Cancelar</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Vista 3: detalhe somente leitura (UC09 FA1; UC20 passos 3-4 e FA1) -->
+      <section id="vista-detalhe" aria-labelledby="titulo-detalhe" hidden>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h1 class="h2 m-0 vista-titulo" id="titulo-detalhe">Solicitação</h1>
+          <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-voltar-detalhe">Voltar para a lista</button>
+        </div>
+        <div class="cartao-app mb-3" id="cab-detalhe"></div>
+        <div id="aviso-detalhe" class="mb-3"></div>
+        <section class="cartao-app" aria-labelledby="titulo-itens">
+          <h2 class="h5" id="titulo-itens">Itens informados e resultado da avaliação</h2>
+          <div id="itens-detalhe"></div>
+        </section>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">LEAF TI &middot; Informação Sustentável</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="../../js/api.js"></script>
+  <script src="../../js/layout.js"></script>
+  <script src="../../js/usuarios-comum.js"></script>
+  <script src="../../js/equipamentos-comum.js"></script>
+  <script src="../../js/solicitacoes-comum.js"></script>
+  <script src="../../js/solicitacoes.js"></script>
+</body>
+</html>

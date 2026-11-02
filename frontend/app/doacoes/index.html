@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<!-- UC19 Consultar doações e equipamentos destinados à ONG. RF04, RF12, RF15; RN04, RN12, RN15; RNF05. DP-44.
+     Perfil Cliente ONG (menu `minhas_doacoes`): vê somente as doações da própria ONG, somente leitura.
+     Visão interna: Administrador e Funcionário (acesso pelo link da tela de avaliação) veem todas, com filtro por ONG.
+     Fluxo principal: lista (equipamento, situação, data da doação) -> selecionar um registro -> detalhes.
+     FA1: sem registros, a tela informa que ainda não há doações ou equipamentos destinados. FE1: registro de outra ONG -> acesso negado.
+     A doação nasce da destinação "Doação" na tela de avaliação (UC10/UC11); aqui só há leitura. -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeafTi - Doações</title>
+  <link rel="shortcut icon" href="../../images/logosemfundo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/identidade.css">
+  <link rel="stylesheet" href="../../css/app.css">
+  <link rel="stylesheet" href="../../css/usuarios.css">
+  <link rel="stylesheet" href="../../css/organizacoes.css">
+  <link rel="stylesheet" href="../../css/equipamentos.css">
+  <link rel="stylesheet" href="../../css/solicitacoes.css">
+</head>
+<body class="app">
+  <a class="pular-conteudo" href="#conteudo-app">Pular para o conteúdo</a>
+  <header id="app-cabecalho"></header>
+
+  <main class="container py-4" id="conteudo-app" tabindex="-1" hidden>
+    <div id="area-doa">
+      <div id="mensagem" class="alert d-none" aria-live="polite"></div>
+
+      <!-- Vista 1: lista (UC19 passos 1-3) -->
+      <section id="vista-lista" aria-labelledby="titulo-lista-doa">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h1 class="h2 m-0 vista-titulo" id="titulo-lista-doa">Doações e equipamentos destinados</h1>
+          <a class="btn btn-success fw-semibold" id="link-solicitacoes-doacao" href="solicitacoes.html">Solicitações de doação</a>
+          <a class="btn btn-outline-leaf fw-semibold" id="link-avaliacao" href="../avaliacao/index.html" hidden>Voltar às solicitações</a>
+        </div>
+        <p class="dica-campo" id="dica-lista">Acompanhe as doações e os equipamentos destinados à sua ONG. Esta tela é somente para consulta.</p>
+
+        <section class="cartao-app mb-3" aria-labelledby="titulo-filtros">
+          <h2 class="h5" id="titulo-filtros">Filtrar doações</h2>
+          <form id="form-filtros" class="row g-3 align-items-end" novalidate>
+            <div class="col-12 col-md-6 col-xl-3" id="bloco-filtro-ong" hidden>
+              <label class="form-label" for="filtro-ong">ONG</label>
+              <select class="form-select" id="filtro-ong"><option value="">Todas as ONGs</option></select>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+              <label class="form-label" for="filtro-de">Doadas a partir de</label>
+              <input type="date" class="form-control" id="filtro-de" aria-describedby="filtro-de-erro">
+              <div id="filtro-de-erro" class="invalid-feedback"></div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+              <label class="form-label" for="filtro-ate">Doadas até</label>
+              <input type="date" class="form-control" id="filtro-ate" aria-describedby="filtro-ate-erro">
+              <div id="filtro-ate-erro" class="invalid-feedback"></div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3 d-flex gap-2">
+              <button type="submit" class="btn btn-success fw-semibold flex-fill">Filtrar</button>
+              <button type="button" class="btn btn-outline-leaf fw-semibold flex-fill" id="btn-limpar">Limpar</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="cartao-app" aria-labelledby="titulo-tabela">
+          <h2 class="h5" id="titulo-tabela">Registros de doação</h2>
+          <p id="estado-lista" class="mb-2" role="status">Carregando...</p>
+          <div id="vazio-lista" class="estado-vazio" hidden></div>
+          <div class="table-responsive">
+            <table class="table table-hover tabela-usuarios tabela-equip mb-3" id="tabela" hidden>
+              <caption class="visually-hidden">Doações e equipamentos destinados</caption>
+              <thead><tr id="cab-tabela"></tr></thead>
+              <tbody id="corpo-tabela"></tbody>
+            </table>
+          </div>
+          <nav class="d-flex flex-wrap align-items-center gap-2" aria-label="Paginação da lista" id="paginacao" hidden>
+            <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-anterior">Anterior</button>
+            <span id="texto-pagina" aria-live="polite"></span>
+            <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-proxima">Próxima</button>
+          </nav>
+        </section>
+      </section>
+
+      <!-- Vista 2: detalhe somente leitura (UC19 passo 4) -->
+      <section id="vista-detalhe" aria-labelledby="titulo-detalhe" hidden>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h1 class="h2 m-0 vista-titulo" id="titulo-detalhe">Detalhes da doação</h1>
+          <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-voltar">Voltar para a lista</button>
+        </div>
+        <div class="cartao-app" id="corpo-detalhe"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">LEAF TI &middot; Informação Sustentável</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="../../js/api.js"></script>
+  <script src="../../js/layout.js"></script>
+  <script src="../../js/usuarios-comum.js"></script>
+  <script src="../../js/equipamentos-comum.js"></script>
+  <script src="../../js/solicitacoes-comum.js"></script>
+  <script src="../../js/doacoes.js"></script>
+</body>
+</html>

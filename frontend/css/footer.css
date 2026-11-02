@@ -1,0 +1,40 @@
+.footer{
+    background-image: url("/images/passaro3.gif");
+    background-position: center;
+    background-repeat: no-repeat;
+    height: 100%;
+    padding: 0px;
+    margin: 0px;
+    background-size: cover;
+
+}
+
+.footer--title{
+    padding: 1rem;
+    text-align: center;
+    font-size: 1rem;
+}
+
+h3{
+    font-weight: bold;
+}
+
+a{
+    text-decoration: none;
+}
+
+li{
+    list-style: none;
+    text-decoration: none;
+}
+
+.footer--links, a, i {
+    text-decoration: underline;
+    color: #000; /* Preto */
+}
+
+
+.footer--social a i {
+    color: rgb(0, 0, 0); /* Vermelho */
+}
+

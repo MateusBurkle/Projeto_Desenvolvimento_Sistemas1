@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<!-- Layout base logado. UC04 passo 4 (sessão iniciada e funcionalidades autorizadas ao perfil); RN01, RNF05.
+     Menu vem de /auth/me (funcionalidades). Módulos futuros: só itens previstos ("Em breve"). -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeafTi - Início</title>
+  <link rel="shortcut icon" href="../images/logosemfundo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../css/identidade.css">
+  <link rel="stylesheet" href="../css/app.css">
+</head>
+<body class="app">
+  <a class="pular-conteudo" href="#conteudo-app">Pular para o conteúdo</a>
+  <header id="app-cabecalho"></header>
+
+  <main class="container py-4" id="conteudo-app" tabindex="-1" hidden>
+    <div class="cartao-app">
+      <h1 class="h2">Bem-vindo(a), <span id="boas-vindas-nome"></span></h1>
+      <p class="mb-1">Perfil: <strong id="boas-vindas-perfil"></strong></p>
+      <p>Use o menu para acessar as funcionalidades do seu perfil. Itens marcados como "Em breve" ainda serão disponibilizados.</p>
+      <div id="atalhos" class="d-flex flex-wrap gap-2"></div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">LEAF TI &middot; Informação Sustentável</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/layout.js"></script>
+  <script>
+    Layout.iniciar({ chave: 'inicio' }).then(function (u) {
+      document.getElementById('boas-vindas-nome').textContent = u.nome;
+      document.getElementById('boas-vindas-perfil').textContent = u.perfil;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<!-- UC21 Consultar histórico geral de vendas (RF15; RN15; DP-46, DP-47, DP-48, DP-49, DP-51), UC14 Registrar e confirmar venda (RF03, RF13, RF14; RN03, RN13, RN14),
+     UC15 Atualizar disponibilidade do estoque (automático na confirmação; RN14) e UC16 Emitir nota fiscal simulada (RF19; RN19).
+     Perfis Administrador e Funcionário (menu `vendas`); a emissão da nota aparece só para o Administrador (a API também bloqueia).
+     UC21: lista com filtros de período, Cliente Empresa e situação (FA1 sem filtros) -> detalhe.
+     UC14: pedido Pendente -> conferir -> informar data e forma de pagamento -> confirmar. FA1 ajustar forma de pagamento / trocar itens;
+           FA2 cancelar. FE1 item indisponível, cliente inativo ou dados incompletos: mensagem do que corrigir.
+     UC15: a API marca os equipamentos como Vendido na mesma transação; falha (FALHA_ESTOQUE) mantém o pedido Pendente.
+     UC16: venda Confirmada -> Emitir nota simulada; FA1 já existe nota: mostra a existente; FE1/FE2: mensagens da API. -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeafTi - Vendas</title>
+  <link rel="shortcut icon" href="../../images/logosemfundo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/identidade.css">
+  <link rel="stylesheet" href="../../css/app.css">
+  <link rel="stylesheet" href="../../css/usuarios.css">
+  <link rel="stylesheet" href="../../css/organizacoes.css">
+  <link rel="stylesheet" href="../../css/equipamentos.css">
+  <link rel="stylesheet" href="../../css/solicitacoes.css">
+  <link rel="stylesheet" href="../../css/vendas.css">
+</head>
+<body class="app">
+  <a class="pular-conteudo" href="#conteudo-app">Pular para o conteúdo</a>
+  <header id="app-cabecalho"></header>
+
+  <main class="container py-4" id="conteudo-app" tabindex="-1" hidden>
+    <div id="area-vendas">
+      <div id="mensagem" class="alert d-none" aria-live="polite"></div>
+
+      <!-- Vista 1: histórico (UC21 passos 1-4) -->
+      <section id="vista-lista" aria-labelledby="titulo-lista">
+        <h1 class="h2 vista-titulo mb-2" id="titulo-lista">Histórico de vendas</h1>
+        <p class="dica-campo">Todos os pedidos e vendas. Pedidos pendentes aguardam a confirmação da LEAF TI.</p>
+
+        <section class="cartao-app mb-3" aria-labelledby="titulo-filtros">
+          <h2 class="h5" id="titulo-filtros">Filtrar vendas</h2>
+          <form id="form-filtros" class="row g-3 align-items-end" novalidate>
+            <div class="col-12 col-md-6 col-xl-3">
+              <label class="form-label" for="filtro-cliente">Cliente Empresa</label>
+              <select class="form-select" id="filtro-cliente"><option value="">Todos os clientes</option></select>
+            </div>
+            <div class="col-12 col-md-6 col-xl-2">
+              <label class="form-label" for="filtro-situacao">Situação</label>
+              <select class="form-select" id="filtro-situacao"><option value="">Todas</option></select>
+            </div>
+            <div class="col-12 col-md-6 col-xl-2">
+              <label class="form-label" for="filtro-de">Data a partir de</label>
+              <input type="date" class="form-control" id="filtro-de" aria-describedby="filtro-de-erro">
+              <div id="filtro-de-erro" class="invalid-feedback"></div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-2">
+              <label class="form-label" for="filtro-ate">Data até</label>
+              <input type="date" class="form-control" id="filtro-ate" aria-describedby="filtro-ate-erro">
+              <div id="filtro-ate-erro" class="invalid-feedback"></div>
+            </div>
+            <div class="col-12 col-xl-3 d-flex gap-2">
+              <button type="submit" class="btn btn-success fw-semibold flex-fill">Filtrar</button>
+              <button type="button" class="btn btn-outline-leaf fw-semibold flex-fill" id="btn-limpar">Limpar</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="cartao-app" aria-labelledby="titulo-tabela">
+          <h2 class="h5" id="titulo-tabela">Vendas e pedidos</h2>
+          <p id="estado-lista" class="mb-2" role="status">Carregando...</p>
+          <div id="vazio-lista" class="estado-vazio" hidden></div>
+          <div class="table-responsive">
+            <table class="table table-hover tabela-usuarios tabela-equip tabela-vendas mb-3" id="tabela" hidden>
+              <caption class="visually-hidden">Histórico geral de vendas</caption>
+              <thead><tr id="cab-tabela"></tr></thead>
+              <tbody id="corpo-tabela"></tbody>
+            </table>
+          </div>
+          <nav class="d-flex flex-wrap align-items-center gap-2" aria-label="Paginação da lista" id="paginacao" hidden>
+            <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-anterior">Anterior</button>
+            <span id="texto-pagina" aria-live="polite"></span>
+            <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-proxima">Próxima</button>
+          </nav>
+        </section>
+      </section>
+
+      <!-- Vista 2: detalhe e ações (UC21 passo 5; UC14; UC16) -->
+      <section id="vista-detalhe" aria-labelledby="titulo-detalhe" hidden>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h1 class="h2 m-0 vista-titulo" id="titulo-detalhe">Detalhes da venda</h1>
+          <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-voltar">Voltar para o histórico</button>
+        </div>
+        <div class="cartao-app">
+          <div id="msg-detalhe" class="alert d-none" aria-live="polite"></div>
+          <div id="corpo-detalhe"></div>
+          <div class="barra-acoes" id="acoes-detalhe"></div>
+
+          <!-- Confirmar venda (UC14 passos 3-6) -->
+          <form id="painel-confirmar" class="painel-acao" hidden novalidate>
+            <h3>Confirmar venda</h3>
+            <p class="dica-campo">Ao confirmar, a venda é registrada e os equipamentos passam a Vendido, indisponíveis para novas vendas. * campo obrigatório</p>
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="c-data">Data da venda <span aria-hidden="true">*</span></label>
+                <input type="date" class="form-control" id="c-data" aria-describedby="c-data-dica c-data-erro" required>
+                <div id="c-data-dica" class="dica-campo">Não pode ser futura nem anterior à data do pedido.</div>
+                <div id="c-data-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="c-forma">Forma de pagamento <span aria-hidden="true">*</span></label>
+                <select class="form-select" id="c-forma" aria-describedby="c-forma-erro" required></select>
+                <div id="c-forma-erro" class="invalid-feedback"></div>
+              </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+              <button type="submit" class="btn btn-success fw-semibold" id="btn-confirmar-venda">Confirmar venda</button>
+              <button type="button" class="btn btn-outline-leaf fw-semibold" data-fechar="painel-confirmar">Fechar</button>
+            </div>
+          </form>
+
+          <!-- Ajustar forma de pagamento (UC14 FA1) -->
+          <form id="painel-pagamento" class="painel-acao" hidden novalidate>
+            <h3>Ajustar forma de pagamento</h3>
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="p-forma">Forma de pagamento <span aria-hidden="true">*</span></label>
+                <select class="form-select" id="p-forma" aria-describedby="p-forma-erro" required></select>
+                <div id="p-forma-erro" class="invalid-feedback"></div>
+              </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+              <button type="submit" class="btn btn-success fw-semibold" id="btn-salvar-pagamento">Salvar</button>
+              <button type="button" class="btn btn-outline-leaf fw-semibold" data-fechar="painel-pagamento">Fechar</button>
+            </div>
+          </form>
+
+          <!-- Trocar itens (UC14 FA1) -->
+          <div id="painel-editor" class="painel-acao" hidden></div>
+
+          <!-- Cancelar pedido (UC14 FA2) -->
+          <div id="painel-cancelar" class="painel-acao" hidden>
+            <h3>Cancelar este pedido?</h3>
+            <p class="mb-2">O pedido será cancelado, sem gerar venda confirmada nem nota fiscal, e os equipamentos serão liberados. Esta ação não pode ser desfeita.</p>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-success fw-semibold" id="btn-confirmar-cancelar">Sim, cancelar pedido</button>
+              <button type="button" class="btn btn-outline-leaf fw-semibold" data-fechar="painel-cancelar">Não, manter pedido</button>
+            </div>
+          </div>
+
+          <!-- Emitir nota simulada (UC16 passos 2-4; somente Administrador) -->
+          <div id="painel-nota" class="painel-acao" hidden>
+            <h3>Emitir nota fiscal simulada?</h3>
+            <p class="mb-2">Confira acima os dados do cliente, dos equipamentos e dos valores. A nota recebe número único e a data de hoje, é marcada como SIMULADA e não tem valor fiscal.</p>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-success fw-semibold" id="btn-confirmar-nota">Confirmar emissão</button>
+              <button type="button" class="btn btn-outline-leaf fw-semibold" data-fechar="painel-nota">Fechar</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">LEAF TI &middot; Informação Sustentável</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="../../js/api.js"></script>
+  <script src="../../js/layout.js"></script>
+  <script src="../../js/usuarios-comum.js"></script>
+  <script src="../../js/equipamentos-comum.js"></script>
+  <script src="../../js/solicitacoes-comum.js"></script>
+  <script src="../../js/vendas-comum.js"></script>
+  <script src="../../js/vendas.js"></script>
+</body>
+</html>

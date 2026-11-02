@@ -1,0 +1,585 @@
+openapi: 3.0.3
+info:
+  title: LEAF TI - Módulo 2 - Organizações e parceiros
+  version: 1.0.0
+  description: |
+    UC01 Manter cadastro de organizações e clientes; UC25 Validar unicidade do CNPJ (include de UC01);
+    UC06 Manter cadastro de parceiros.
+    Requisitos: RF06, RF09, RF10, RF03 (trecho); RN01, RN06, RN09, RN10; RNF04, RNF05. Spec: especificacoes/modulo-2.md.
+    STATUS: APROVADO em 2026-10-30 pelo usuário; documento atualizado pelo Cowork (docs/EDICAO_COWORK_M2.md) e conferido. DP-21 a DP-28 resolvidas (DP-25: sem exclusão física).
+
+    Convenções (docs/CONVENCOES.md): prefixo /api/v1, JSON, Bearer, erro {codigo, mensagem, campos},
+    listagens {items,total,page,size}. Campos com o nome das colunas. Sem exclusão física: desativar preserva o histórico
+    e bloqueia novas operações (UC01 FA2, UC06 FA2, RN06); não há DELETE neste módulo (DP-25).
+
+    Esclarecimentos de implementação (coordenador, sem mudar regra): (1) a validação do corpo (400) ocorre antes da busca
+    por id (404), como no módulo 1; (2) `sem_parceria=false` = sem filtro; (3) reativar parceria só checa a organização Ativa
+    na transição Inativa -> Ativa (repetir Ativa é idempotente, 200); (4) ordem no POST /parceiros: 404 organização
+    inexistente, 422 ORGANIZACAO_INVALIDA, 409 PARCERIA_DUPLICADA, 422 ATUACAO_INCOMPATIVEL; (5) TIPO_EM_USO só dispara quando
+    o tipo realmente muda e a parceria conta em qualquer situação; (6) `q` casa nome (sem caixa) e CNPJ com ou sem máscara;
+    (7) telefone aceita ( ) - . + e espaços como máscara; (8) em PATCH /contato, o corpo é validado (400) antes da checagem de tipo do Funcionário (403 OPERACAO_NAO_PERMITIDA); (9) o Funcionário pode alterar o contato de organização Inativa (DP-29).
+
+    Regras comuns (todas no service):
+    - UC25 (include de UC01): `cnpj` aceita máscara (pontos, barra, hífen, espaços), é normalizado para 14 dígitos
+      (DP-21: validação de formato, sem dígito verificador); duplicado entre TODAS as organizações -> 409 CNPJ_DUPLICADO;
+      na alteração o próprio registro é excluído da busca. Formato inválido -> 400 DADOS_INVALIDOS (campos.cnpj).
+    - Campos obrigatórios (UC01 FE2, RNF04): nome_razao_social (1 a 150), cnpj, tipo, telefone, email, endereco (1 a 255);
+      todos são NOT NULL no banco. Textos sem espaços nas pontas. telefone: 10 ou 11 dígitos (máscara aceita; armazenado só
+      com dígitos). email: formato x@y.z, até 254, minúsculas (DP-22).
+    - `tipo`: Cliente Empresa, Cliente ONG ou Empresa Doadora. `situacao`: exatamente `Ativa` ou `Inativa` (DP-03).
+    - Parceria (DP-27): `situacao_parceria` exatamente `Ativa` ou `Inativa`; uma única parceria por organização
+      (PARCEIRO.id_organizacao é UNIQUE); a organização não pode ser trocada depois de criada a parceria.
+servers:
+  - url: /api/v1
+
+tags:
+  - name: Organizações
+  - name: Parceiros
+
+paths:
+  /organizacoes:
+    get:
+      tags: [Organizações]
+      operationId: listarOrganizacoes
+      summary: Listar organizações (UC01 FA1)
+      description: |
+        Perfis autorizados: Administrador e Funcionário (RF06, RF09; RF03). Demais perfis -> 403 SEM_PERMISSAO.
+        Filtros: `tipo`, `situacao`, `q` (busca parcial em nome/razão social e CNPJ, sem diferenciar caixa), e
+        `sem_parceria=true` (somente organizações sem registro em PARCEIRO, para o formulário de UC06).
+        Ordenação por nome. Paginação padrão (page=1, size=20, size máx. 100).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: tipo, in: query, schema: { $ref: '#/components/schemas/TipoOrganizacao' } }
+        - { name: situacao, in: query, schema: { $ref: '#/components/schemas/SituacaoOrganizacao' } }
+        - { name: sem_parceria, in: query, schema: { type: boolean } }
+        - { name: q, in: query, schema: { type: string, maxLength: 150 } }
+      responses:
+        '200':
+          description: Página de organizações.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginaOrganizacoes' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+    post:
+      tags: [Organizações]
+      operationId: criarOrganizacao
+      summary: Cadastrar organização (UC01 fluxo principal, UC25)
+      description: |
+        Perfis autorizados: Administrador (RF06, RF09). Funcionário -> 403 SEM_PERMISSAO.
+        Fluxo: campos obrigatórios e formatos (400, UC01 FE2) -> UC25 CNPJ (409, UC01 FE1) -> grava -> 201.
+        `situacao` é opcional e vale `Ativa` por padrão. Nada é gravado em qualquer erro.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrganizacaoCriar' }
+            example:
+              nome_razao_social: Recicla Tech Ltda
+              cnpj: "12.345.678/0001-95"
+              tipo: Cliente Empresa
+              telefone: "(11) 91234-5678"
+              email: contato@reciclatech.com
+              endereco: Rua das Folhas, 100, São Paulo - SP
+      responses:
+        '201':
+          description: Organização cadastrada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organizacao' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '409': { $ref: '#/components/responses/CnpjDuplicado' }
+
+  /organizacao:
+    get:
+      tags: [Minha organização]
+      operationId: obterMinhaOrganizacao
+      summary: Dados da própria organização (DP-93, DP-98)
+      description: |
+        Perfis autorizados: Cliente Empresa, Cliente ONG e Empresa Doadora (demais 403). Sem id na URL: devolve sempre a organização do usuário
+        autenticado (não existe acesso a organização alheia). Resposta: {id_organizacao, nome_razao_social, cnpj, tipo, telefone, email, endereco, situacao}
+        (CNPJ, tipo e situação só para leitura). Usuário sem organização -> 404 NAO_ENCONTRADO.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Organização. }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+    patch:
+      tags: [Minha organização]
+      operationId: atualizarMinhaOrganizacao
+      summary: Atualizar nome, telefone, e-mail e endereço da própria organização (DP-93, DP-94)
+      description: |
+        Mesmos perfis. Corpo {nome_razao_social?, telefone?, email?, endereco?}, ao menos um campo, com as MESMAS validações do PUT /organizacoes/{id}.
+        CNPJ, tipo, situação e parceria NÃO mudam (campos extras ignorados). O nome não precisa ser único (só o CNPJ). Qualquer usuário da
+        organização pode editar. Organização Inativa também pode (decisão delegada: é só cadastro de contato). 200 = Organização atualizada.
+        Efeito: vendas, notas e doações mostram o nome ATUAL (DP-94).
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Organização atualizada. }
+        '400': { description: DADOS_INVALIDOS. }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+
+  /organizacoes/{id_organizacao}:
+    parameters:
+      - { name: id_organizacao, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Organizações]
+      operationId: obterOrganizacao
+      summary: Consultar organização (UC01 FA1)
+      description: 'Perfis autorizados: Administrador e Funcionário. Inexistente -> 404 NAO_ENCONTRADO.'
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Organização.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organizacao' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+    put:
+      tags: [Organizações]
+      operationId: alterarOrganizacao
+      summary: Alterar cadastro completo (UC01 FA1, UC25)
+      description: |
+        Perfis autorizados: Administrador (RF06, RF09).
+        Altera nome_razao_social, cnpj, tipo, telefone, email e endereco (todos obrigatórios). A `situacao` NÃO é alterada
+        aqui (use PATCH /situacao). Ordem: 400 -> 404 -> UC25 (409, excluindo o próprio registro) -> mudança de tipo.
+        Mudança de `tipo` (DP-23, proposta): bloqueada com 422 TIPO_EM_USO enquanto a organização tiver usuários
+        vinculados (o perfil deles depende do tipo, módulo 1) ou uma parceria com atuação 'Empresa Doadora' e o novo tipo
+        não for 'Empresa Doadora'. Os módulos seguintes (solicitações, vendas, doações) acrescentam suas próprias
+        verificações a esta regra.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrganizacaoAlterar' }
+      responses:
+        '200':
+          description: Organização atualizada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organizacao' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '409': { $ref: '#/components/responses/CnpjDuplicado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+    delete:
+      tags: [Organizações]
+      operationId: excluirOrganizacao
+      summary: Excluir organização e a parceria dela (DP-63; substitui DP-24/DP-25)
+      description: |
+        Perfil autorizado: Administrador. Query opcional excluir_usuarios=true. Exclusão FÍSICA da ORGANIZACAO e da PARCEIRO dela.
+        Histórico (solicitação, venda, doação, equipamento vinculado, em qualquer módulo) -> 422 ORGANIZACAO_EM_USO, mensagem
+        "Esta organização tem histórico e não pode ser excluída; você pode desativá-la"; nada é removido e Desativar continua válido.
+        Sem histórico, mas com usuários vinculados e sem excluir_usuarios=true -> 422 ORGANIZACAO_COM_USUARIOS (campos: quantidade_usuarios e usuarios = lista de {id_usuario, nome, email, perfil}, para a tela de confirmação).
+        Com excluir_usuarios=true, se entre os usuários houver o único Administrador -> 422 ALTERACAO_BLOQUEADA, nada removido (DP-65).
+        Com excluir_usuarios=true e sem histórico, remove também os usuários (a última conta Administrador nunca tem organização).
+        Tudo em uma transação. 204 sem corpo. Inexistente -> 404 NAO_ENCONTRADO. O front exige confirmação explícita.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Organização excluída. }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+  /organizacoes/{id_organizacao}/contato:
+    parameters:
+      - { name: id_organizacao, in: path, required: true, schema: { type: integer } }
+    patch:
+      tags: [Organizações]
+      operationId: alterarContatoOrganizacao
+      summary: Alterar dados de contato (RF09 - "dados autorizados" do Funcionário; DP-26)
+      description: |
+        Perfis autorizados: Administrador e Funcionário (RF03, RF09).
+        Altera somente `telefone`, `email` e `endereco`. O Funcionário só pode alterar organizações do tipo
+        Cliente Empresa ou Cliente ONG (clientes organizacionais, RF09); para Empresa Doadora ->
+        403 OPERACAO_NAO_PERMITIDA. CNPJ, nome/razão social, tipo e situação são exclusivos do Administrador (RF06).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ContatoAlterar' }
+      responses:
+        '200':
+          description: Contato atualizado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organizacao' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403':
+          description: Perfil sem permissão (SEM_PERMISSAO) ou Funcionário tentando alterar Empresa Doadora (OPERACAO_NAO_PERMITIDA).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Erro' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+
+  /organizacoes/{id_organizacao}/situacao:
+    parameters:
+      - { name: id_organizacao, in: path, required: true, schema: { type: integer } }
+    patch:
+      tags: [Organizações]
+      operationId: alterarSituacaoOrganizacao
+      summary: Desativar ou reativar organização (UC01 FA2, RN06, RN09)
+      description: |
+        Perfis autorizados: Administrador. A desativação NÃO apaga nada: preserva todos os registros e impede novas operações
+        (os usuários da organização passam a receber 403 CONTA_INATIVA no login, módulo 0). Não há efeito em cascata sobre
+        a parceria nem sobre as contas (a parceria permanece como está, mas as operações exigem organização ativa).
+        Reativar volta a liberar o acesso. Idempotente. O front pede confirmação antes de desativar.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SituacaoAlterar' }
+            example: { situacao: Inativa }
+      responses:
+        '200':
+          description: Situação atualizada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organizacao' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+
+  /parceiros:
+    get:
+      tags: [Parceiros]
+      operationId: listarParceiros
+      summary: Listar parceiros (UC06 FA1)
+      description: |
+        Perfis autorizados: Administrador (RF10). Os demais -> 403 SEM_PERMISSAO.
+        Filtros: `tipo_parceria`, `situacao_parceria`, `q` (nome/razão social ou CNPJ da organização).
+        Cada item traz os dados da organização por junção (nunca duplicados no PARCEIRO). Paginação padrão.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: tipo_parceria, in: query, schema: { $ref: '#/components/schemas/TipoParceria' } }
+        - { name: situacao_parceria, in: query, schema: { $ref: '#/components/schemas/SituacaoParceria' } }
+        - { name: q, in: query, schema: { type: string, maxLength: 150 } }
+      responses:
+        '200':
+          description: Página de parceiros.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginaParceiros' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+    post:
+      tags: [Parceiros]
+      operationId: criarParceiro
+      summary: Cadastrar parceiro (UC06 fluxo principal)
+      description: |
+        Perfis autorizados: Administrador (RF10, RN10).
+        Valida: organização existe e está Ativa (404 NAO_ENCONTRADO se não existe; 422 ORGANIZACAO_INVALIDA se inativa, DP-27);
+        já possui parceria -> 409 PARCERIA_DUPLICADA; atuação 'Empresa Doadora' exige organização do tipo 'Empresa Doadora'
+        -> 422 ATUACAO_INCOMPATIVEL (UC06 FE2); 'Patrocinador em Potencial' vale para qualquer tipo de organização (DP-27).
+        `situacao_parceria` opcional, padrão `Ativa`. Nada é gravado em caso de erro (UC06 FE1).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ParceiroCriar' }
+            example: { id_organizacao: 3, tipo_parceria: Empresa Doadora, situacao_parceria: Ativa }
+      responses:
+        '201':
+          description: Parceiro cadastrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Parceiro' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '409':
+          description: Organização já possui parceria (PARCERIA_DUPLICADA).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Erro' }
+              example: { codigo: PARCERIA_DUPLICADA, mensagem: Esta organização já possui um vínculo de parceria., campos: { id_organizacao: duplicado } }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /parceiros/{id_parceiro}:
+    parameters:
+      - { name: id_parceiro, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Parceiros]
+      operationId: obterParceiro
+      summary: Consultar parceiro (UC06 FA1)
+      description: 'Perfis autorizados: Administrador. Inexistente -> 404 NAO_ENCONTRADO.'
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Parceiro.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Parceiro' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+    put:
+      tags: [Parceiros]
+      operationId: alterarParceiro
+      summary: Alterar atuação na parceria (UC06 FA1)
+      description: |
+        Perfis autorizados: Administrador. Altera somente `tipo_parceria` (a organização não pode ser trocada, DP-27, e os
+        dados da organização são mantidos no módulo de organizações). Revalida UC06 FE2 (Empresa Doadora exige organização do
+        tipo Empresa Doadora) -> 422 ATUACAO_INCOMPATIVEL. A situação da parceria muda em PATCH /situacao.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ParceiroAlterar' }
+      responses:
+        '200':
+          description: Parceiro atualizado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Parceiro' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /parceiros/{id_parceiro}/situacao:
+    parameters:
+      - { name: id_parceiro, in: path, required: true, schema: { type: integer } }
+    patch:
+      tags: [Parceiros]
+      operationId: alterarSituacaoParceiro
+      summary: Desativar ou reativar parceria (UC06 FA2, RN10)
+      description: |
+        Perfis autorizados: Administrador. Desativar preserva os registros anteriores (solicitações já feitas) e impede novas
+        (RN10). Reativar exige a organização Ativa -> senão 422 ORGANIZACAO_INVALIDA (DP-27). Idempotente. O front pede
+        confirmação antes de desativar.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SituacaoParceriaAlterar' }
+            example: { situacao_parceria: Inativa }
+      responses:
+        '200':
+          description: Situação atualizada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Parceiro' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  responses:
+    NaoAutenticado:
+      description: Token ausente, inválido ou expirado (NAO_AUTENTICADO).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    SemPermissao:
+      description: Perfil sem autorização (SEM_PERMISSAO) ou conta inativa (CONTA_INATIVA).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example: { codigo: SEM_PERMISSAO, mensagem: Você não tem permissão para esta operação., campos: {} }
+    DadosInvalidos:
+      description: Campos obrigatórios ausentes ou formato inválido (DADOS_INVALIDOS; UC01 FE2, UC06 FE1, UC25 FE1, RNF04).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example:
+            codigo: DADOS_INVALIDOS
+            mensagem: Dados inválidos. Corrija os campos indicados.
+            campos: { cnpj: deve ter 14 dígitos }
+    CnpjDuplicado:
+      description: CNPJ já cadastrado em outra organização (CNPJ_DUPLICADO; UC25 FE1, RN06, RN09).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example: { codigo: CNPJ_DUPLICADO, mensagem: Este CNPJ já está cadastrado., campos: { cnpj: duplicado } }
+    NaoEncontrado:
+      description: Registro inexistente (NAO_ENCONTRADO).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    RegraViolada:
+      description: |
+        Regra violada: TIPO_EM_USO (DP-23), ORGANIZACAO_INVALIDA (organização inativa, DP-27),
+        ATUACAO_INCOMPATIVEL (UC06 FE2).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example:
+            codigo: ATUACAO_INCOMPATIVEL
+            mensagem: A atuação Empresa Doadora exige uma organização do tipo Empresa Doadora.
+            campos: { tipo_parceria: incompatível com o tipo da organização }
+
+  schemas:
+    TipoOrganizacao:
+      type: string
+      enum: [Cliente Empresa, Cliente ONG, Empresa Doadora]
+    SituacaoOrganizacao:
+      type: string
+      enum: [Ativa, Inativa]
+    TipoParceria:
+      type: string
+      enum: [Empresa Doadora, Patrocinador em Potencial]
+    SituacaoParceria:
+      type: string
+      enum: [Ativa, Inativa]
+    OrganizacaoCriar:
+      type: object
+      required: [nome_razao_social, cnpj, tipo, telefone, email, endereco]
+      properties:
+        nome_razao_social: { type: string, minLength: 1, maxLength: 150 }
+        cnpj: { type: string, description: Com ou sem máscara; normalizado para 14 dígitos., example: "12345678000195" }
+        tipo: { $ref: '#/components/schemas/TipoOrganizacao' }
+        telefone: { type: string, description: 10 ou 11 dígitos (máscara aceita). }
+        email: { type: string, format: email, maxLength: 254 }
+        endereco: { type: string, minLength: 1, maxLength: 255 }
+        situacao: { allOf: [{ $ref: '#/components/schemas/SituacaoOrganizacao' }], default: Ativa }
+    OrganizacaoAlterar:
+      type: object
+      required: [nome_razao_social, cnpj, tipo, telefone, email, endereco]
+      properties:
+        nome_razao_social: { type: string, minLength: 1, maxLength: 150 }
+        cnpj: { type: string }
+        tipo: { $ref: '#/components/schemas/TipoOrganizacao' }
+        telefone: { type: string }
+        email: { type: string, format: email, maxLength: 254 }
+        endereco: { type: string, minLength: 1, maxLength: 255 }
+    ContatoAlterar:
+      type: object
+      required: [telefone, email, endereco]
+      properties:
+        telefone: { type: string }
+        email: { type: string, format: email, maxLength: 254 }
+        endereco: { type: string, minLength: 1, maxLength: 255 }
+    SituacaoAlterar:
+      type: object
+      required: [situacao]
+      properties:
+        situacao: { $ref: '#/components/schemas/SituacaoOrganizacao' }
+    Organizacao:
+      type: object
+      required: [id_organizacao, cnpj, nome_razao_social, tipo, telefone, email, endereco, situacao, possui_parceria]
+      properties:
+        id_organizacao: { type: integer }
+        cnpj: { type: string, description: 14 dígitos. }
+        nome_razao_social: { type: string }
+        tipo: { $ref: '#/components/schemas/TipoOrganizacao' }
+        telefone: { type: string }
+        email: { type: string }
+        endereco: { type: string }
+        situacao: { $ref: '#/components/schemas/SituacaoOrganizacao' }
+        possui_parceria: { type: boolean, description: Somente leitura (existe linha em PARCEIRO). }
+    PaginaOrganizacoes:
+      type: object
+      required: [items, total, page, size]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Organizacao' } }
+        total: { type: integer }
+        page: { type: integer }
+        size: { type: integer }
+    ParceiroCriar:
+      type: object
+      required: [id_organizacao, tipo_parceria]
+      properties:
+        id_organizacao: { type: integer }
+        tipo_parceria: { $ref: '#/components/schemas/TipoParceria' }
+        situacao_parceria: { allOf: [{ $ref: '#/components/schemas/SituacaoParceria' }], default: Ativa }
+    ParceiroAlterar:
+      type: object
+      required: [tipo_parceria]
+      properties:
+        tipo_parceria: { $ref: '#/components/schemas/TipoParceria' }
+    SituacaoParceriaAlterar:
+      type: object
+      required: [situacao_parceria]
+      properties:
+        situacao_parceria: { $ref: '#/components/schemas/SituacaoParceria' }
+    Parceiro:
+      type: object
+      description: Dados da organização vêm por junção (sem duplicação no PARCEIRO, RF10).
+      required: [id_parceiro, id_organizacao, tipo_parceria, situacao_parceria, nome_razao_social, cnpj, tipo_organizacao, situacao_organizacao]
+      properties:
+        id_parceiro: { type: integer }
+        id_organizacao: { type: integer }
+        tipo_parceria: { $ref: '#/components/schemas/TipoParceria' }
+        situacao_parceria: { $ref: '#/components/schemas/SituacaoParceria' }
+        nome_razao_social: { type: string }
+        cnpj: { type: string }
+        telefone: { type: string }
+        email: { type: string }
+        endereco: { type: string }
+        tipo_organizacao: { $ref: '#/components/schemas/TipoOrganizacao' }
+        situacao_organizacao: { $ref: '#/components/schemas/SituacaoOrganizacao' }
+    PaginaParceiros:
+      type: object
+      required: [items, total, page, size]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Parceiro' } }
+        total: { type: integer }
+        page: { type: integer }
+        size: { type: integer }
+    Erro:
+      type: object
+      required: [codigo, mensagem, campos]
+      properties:
+        codigo: { type: string }
+        mensagem: { type: string }
+        campos: { type: object, additionalProperties: { type: string } }
+
+# Matriz de permissões por rota (RN01, RF03, RF06, RF09, RF10, RNF05)
+x-permissoes:
+  GET   /organizacoes: [Administrador, Funcionário]
+  POST  /organizacoes: [Administrador]
+  GET   /organizacoes/{id}: [Administrador, Funcionário]
+  PUT   /organizacoes/{id}: [Administrador]
+  DELETE /organizacoes/{id}: [Administrador]   # DP-63
+  GET   /organizacao: [Cliente Empresa, Cliente ONG, Empresa Doadora]   # DP-93, DP-98
+  PATCH /organizacao: [Cliente Empresa, Cliente ONG, Empresa Doadora]   # DP-93, DP-98
+  PATCH /organizacoes/{id}/contato: [Administrador, Funcionário]   # Funcionário: só Cliente Empresa e Cliente ONG
+  PATCH /organizacoes/{id}/situacao: [Administrador]
+  GET   /parceiros: [Administrador]
+  POST  /parceiros: [Administrador]
+  GET   /parceiros/{id}: [Administrador]
+  PUT   /parceiros/{id}: [Administrador]
+  PATCH /parceiros/{id}/situacao: [Administrador]
+# Cliente Empresa, Cliente ONG e Empresa Doadora não acessam rotas deste módulo.
+# UC25 é include de UC01 e não tem rota própria (DP-28).
+
+x-codigos-erro:
+  CNPJ_DUPLICADO: "409"
+  PARCERIA_DUPLICADA: "409"
+  TIPO_EM_USO: "422"
+  ORGANIZACAO_EM_USO: "422"   # DP-63
+  ORGANIZACAO_COM_USUARIOS: "422"   # DP-63
+  ALTERACAO_BLOQUEADA: "422"   # DP-65 (exclusão em lote)
+  ORGANIZACAO_INVALIDA: "422"
+  ATUACAO_INCOMPATIVEL: "422"
+  OPERACAO_NAO_PERMITIDA: "403"
+  NAO_ENCONTRADO: "404"

@@ -1,0 +1,486 @@
+openapi: 3.0.3
+info:
+  title: LEAF TI - Módulo 1 - Acesso e usuários
+  version: 1.0.0
+  description: |
+    UC02 Gerenciar usuários e atribuir perfis (criar, consultar, alterar, excluir; texto M1 de docs/EDICAO_COWORK.md); UC03 Cadastrar usuário da própria organização;
+    UC26 Verificar disponibilidade do e-mail (include de UC02/UC03); UC27 Atribuir perfil (include de UC02).
+    Requisitos: RF01, RF02, RF04, RF09; RN01, RN02, RN04, RN09; RNF03, RNF04, RNF05. Spec: especificacoes/modulo-1.md.
+    STATUS: APROVADO em 2026-10-30 pelo usuário; documento e diagramas já atualizados pelo Cowork (docs/EDICAO_COWORK.md). DP-13 a DP-20 resolvidas.
+
+    Convenções (docs/CONVENCOES.md): prefixo /api/v1, JSON, Bearer, erro {codigo, mensagem, campos},
+    listagens {items,total,page,size}. Campos com o nome das colunas de USUARIO. Sem exclusão física e,
+    como USUARIO não tem coluna de situação (DP-02), sem desativação individual de conta.
+
+    Esclarecimentos de implementação (coordenador, sem mudar regra): (1) perfil de cliente/doadora sem id_organizacao -> 422
+    VINCULO_INVALIDO; ORGANIZACAO_INVALIDA vale só quando a organização informada não existe ou está inativa e é checada
+    ANTES do tipo; (2) Administrador/Funcionário com id_organizacao não nulo -> VINCULO_INVALIDO; (3) em ALTERACAO_BLOQUEADA,
+    campos = {perfil: bloqueado} ao alterar e {id_usuario: bloqueado} ao excluir; (4) campos extras no corpo são ignorados,
+    exceto `perfil` e `id_organizacao` em POST /organizacao/usuarios (UC03 FE2).
+
+    Regras de negócio comuns (todas no service):
+    - UC26: e-mail normalizado (strip + minúsculas), formato x@y.z, máx. 254; duplicidade verificada sem diferenciar
+      maiúsculas/minúsculas, inclusive em alteração (a própria conta não conta como duplicada). Duplicado -> 409 EMAIL_DUPLICADO.
+    - Senha: 8 a 128 caracteres (DP-09/DP-13), gravada apenas como hash bcrypt (RNF03); nunca devolvida nem registrada em log.
+    - Nome: obrigatório, 1 a 120 caracteres, sem espaços nas pontas.
+    - Organização (UC02 FE2, RN06/RN09): precisa existir e estar com situacao 'Ativa', senão 422 ORGANIZACAO_INVALIDA.
+    - Coerência perfil x organização (UC27 passo 3, DP-14, proposta): Administrador e Funcionário NÃO têm organização
+      (id_organizacao deve ser nulo); Cliente Empresa exige organização do tipo 'Cliente Empresa'; Cliente ONG exige tipo
+      'Cliente ONG'; Empresa Doadora exige tipo 'Empresa Doadora'. Violação -> 422 VINCULO_INVALIDO.
+servers:
+  - url: /api/v1
+
+tags:
+  - name: Usuários (Administrador)
+  - name: Usuários da organização (Cliente Empresa e Cliente ONG)
+
+paths:
+  /usuarios/perfis-atribuiveis:
+    get:
+      tags: [Usuários (Administrador)]
+      operationId: listarPerfisAtribuiveis
+      summary: Perfis que o Administrador pode atribuir (UC27 passo 1)
+      description: |
+        Perfis autorizados: Administrador. (RN02)
+        Devolve os 5 perfis e se exigem organização e de qual tipo, para o formulário.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista de perfis.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PerfilAtribuivel' }
+              example:
+                - { perfil: Administrador, exige_organizacao: false, tipo_organizacao: null }
+                - { perfil: Funcionário, exige_organizacao: false, tipo_organizacao: null }
+                - { perfil: Cliente Empresa, exige_organizacao: true, tipo_organizacao: Cliente Empresa }
+                - { perfil: Cliente ONG, exige_organizacao: true, tipo_organizacao: Cliente ONG }
+                - { perfil: Empresa Doadora, exige_organizacao: true, tipo_organizacao: Empresa Doadora }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+
+  /usuarios/opcoes-organizacao:
+    get:
+      tags: [Usuários (Administrador)]
+      operationId: listarOrganizacoesAtivas
+      summary: Organizações ativas para vincular a uma conta (UC02 passo 2) - leitura (DP-15)
+      description: |
+        Perfis autorizados: Administrador.
+        Somente leitura, apenas organizações com situacao 'Ativa'. Existe para o formulário antes de o Módulo 2
+        (cadastro de organizações) estar pronto; pode ser substituída pela listagem do Módulo 2.
+        Filtro opcional `tipo`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: tipo, in: query, required: false, schema: { $ref: '#/components/schemas/TipoOrganizacao' } }
+      responses:
+        '200':
+          description: Organizações ativas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/OrganizacaoOpcao' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+
+  /usuarios:
+    get:
+      tags: [Usuários (Administrador)]
+      operationId: listarUsuarios
+      summary: Listar usuários (UC02 FA1, seleção da conta existente)
+      description: |
+        Perfis autorizados: Administrador. Funcionário e demais perfis -> 403 SEM_PERMISSAO (RN02, RN03).
+        Filtros opcionais: `perfil`, `id_organizacao`, `q` (busca parcial em nome e e-mail, sem diferenciar caixa).
+        Ordenação por nome. Paginação padrão (page=1, size=20, size máx. 100).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: perfil, in: query, schema: { $ref: '#/components/schemas/Perfil' } }
+        - { name: id_organizacao, in: query, schema: { type: integer } }
+        - { name: q, in: query, schema: { type: string, maxLength: 120 } }
+      responses:
+        '200':
+          description: Página de usuários.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginaUsuarios' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+    post:
+      tags: [Usuários (Administrador)]
+      operationId: criarUsuario
+      summary: Cadastrar usuário e atribuir perfil (UC02, UC26, UC27)
+      description: |
+        Perfis autorizados: Administrador (RN02). Os demais -> 403 SEM_PERMISSAO.
+        Fluxo: valida dados (400) -> UC26 e-mail (409) -> UC27 perfil/vínculo (422) -> hash da senha -> grava -> 201.
+        Erros: 400 DADOS_INVALIDOS (UC02 FE1); 409 EMAIL_DUPLICADO (UC02 FE1, UC26 FE1);
+        422 ORGANIZACAO_INVALIDA (UC02 FE2: inexistente ou inativa); 422 VINCULO_INVALIDO (UC27 passo 3);
+        perfil fora dos 5 valores ou ausente -> 400 DADOS_INVALIDOS com campos.perfil (UC27 FE1 / UC02 FE3);
+        nenhuma conta é criada em qualquer erro.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UsuarioCriar' }
+            example:
+              nome: Maria Souza
+              email: maria@empresa.com
+              senha: SenhaForte123
+              perfil: Cliente Empresa
+              id_organizacao: 3
+      responses:
+        '201':
+          description: Conta criada; devolve o usuário e as funcionalidades atribuídas (UC02 passo 6).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuario' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '409': { $ref: '#/components/responses/EmailDuplicado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /usuarios/{id_usuario}:
+    parameters:
+      - { name: id_usuario, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Usuários (Administrador)]
+      operationId: obterUsuario
+      summary: Consultar um usuário (UC02 FA1)
+      description: 'Perfis autorizados: Administrador. Inexistente -> 404 NAO_ENCONTRADO.'
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Usuário.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuario' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+    put:
+      tags: [Usuários (Administrador)]
+      operationId: alterarUsuario
+      summary: Alterar dados, perfil ou vínculo da conta (UC02 FA1 e FA2, UC26, UC27)
+      description: |
+        Perfis autorizados: Administrador (RN02).
+        Atualização completa dos campos editáveis: `nome`, `email` e `perfil` (obrigatórios) e `id_organizacao` (ausente = nulo; a omissão
+        desvincula a conta, o que só é válido para Administrador e Funcionário) e `senha` (OPCIONAL: se ausente, mantém a senha atual; se presente,
+        8 a 128 caracteres e gravada como hash bcrypt, RNF03).
+        Ordem: 404 -> 400 (formato) -> bloqueios (UC02 FE4) -> UC26 se o e-mail mudou (409, desconsiderando a própria conta,
+        sem diferenciar maiúsculas) -> UC27 (perfil x organização, organização ativa) -> grava. Em qualquer erro a conta
+        permanece sem alterações (UC02 FE3/FE4).
+        Bloqueios (RN02, UC02 FE4): o Administrador não pode alterar o PRÓPRIO perfil (nem o próprio id_organizacao);
+        não se altera o perfil da última conta Administrador -> 422 ALTERACAO_BLOQUEADA. O Administrador pode alterar o
+        próprio nome, e-mail e senha.
+        Perfil e organização são lidos do banco a cada requisição, então a mudança vale imediatamente para tokens já emitidos.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UsuarioAlterar' }
+            example: { nome: Maria Souza, email: maria@empresa.com, perfil: Funcionário, id_organizacao: null }
+      responses:
+        '200':
+          description: Conta atualizada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuario' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '409': { $ref: '#/components/responses/EmailDuplicado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+    delete:
+      tags: [Usuários (Administrador)]
+      operationId: excluirUsuario
+      summary: Excluir conta (UC02 FA3)
+      description: |
+        Perfis autorizados: Administrador (RN02). Exclusão FÍSICA da linha de USUARIO (decisão do usuário; nenhuma tabela
+        referencia USUARIO). Resposta 204 sem corpo; a conta deixa de existir e o login com o e-mail passa a dar 401.
+        Bloqueios (UC02 FE4, RN02): excluir a própria conta ou a última conta com perfil Administrador -> 422 ALTERACAO_BLOQUEADA;
+        nada é removido. Inexistente -> 404 NAO_ENCONTRADO. O front deve pedir confirmação antes de chamar.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Conta excluída. }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /usuarios/me:
+    patch:
+      tags: [Conta própria]
+      operationId: atualizarPropriaConta
+      summary: Atualizar o próprio nome e e-mail (DP-95, DP-98, DP-101)
+      description: |
+        Perfis autorizados: todos os cinco (DP-101). Perfil nunca muda (DP-104). Corpo {nome?, email?}, ao menos um campo.
+        Mesmas validações do cadastro (nome e e-mail válido, normalizado). E-mail já usado por OUTRA conta -> 409 EMAIL_DUPLICADO.
+        Perfil e organização não mudam (campos extras ignorados). Não exige senha (DP-95). O token atual continua válido. 200 = Usuário atualizado.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Usuário atualizado. }
+        '400': { description: DADOS_INVALIDOS. }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '409': { $ref: '#/components/responses/EmailDuplicado' }
+    delete:
+      tags: [Conta própria]
+      operationId: excluirPropriaConta
+      summary: Excluir a própria conta (UC02 FA3 ampliado; DP-64, DP-65, DP-66)
+      description: |
+        Perfis autorizados: todos os autenticados (Administrador, Funcionário, Cliente Empresa, Cliente ONG, Empresa Doadora).
+        Corpo: { "senha": "<senha atual>" }. Senha incorreta -> 401 SENHA_INVALIDA (a sessão continua). Última conta Administrador
+        -> 422 ALTERACAO_BLOQUEADA. Sucesso: exclusão FÍSICA da linha de USUARIO, 204; o token passa a dar 401 (usuário inexistente).
+        A organização do usuário permanece (DP-66). O front pede a senha, confirma, limpa a sessão e volta ao início com "Conta excluída".
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [senha], properties: { senha: { type: string, minLength: 1, maxLength: 128 } } }
+      responses:
+        '204': { description: Conta excluída. }
+        '401': { description: "Não autenticado ou SENHA_INVALIDA." }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /usuarios/me/senha:
+    put:
+      tags: [Conta própria]
+      operationId: alterarPropriaSenha
+      summary: Trocar a própria senha (DP-96, DP-97, DP-101)
+      description: |
+        Perfis autorizados: todos os cinco (DP-101). Corpo {senha_nova}, 8 a 128 caracteres. NÃO exige a senha atual (DP-96).
+        Igual à senha atual (comparada com o hash guardado) -> 422 SENHA_IGUAL_ATUAL. Grava somente o novo hash bcrypt. 204 sem corpo.
+        A sessão atual e as outras continuam válidas. Senha nunca registrada em log nem devolvida.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [senha_nova], properties: { senha_nova: { type: string, minLength: 8, maxLength: 128 } } }
+      responses:
+        '204': { description: Senha alterada. }
+        '400': { description: DADOS_INVALIDOS. }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /organizacao/usuarios:
+    get:
+      tags: [Usuários da organização (Cliente Empresa e Cliente ONG)]
+      operationId: listarUsuariosDaOrganizacao
+      summary: Consultar usuários da própria organização (UC03 FA1)
+      description: |
+        Perfis autorizados: Cliente Empresa e Cliente ONG (RN04). Administrador, Funcionário e Empresa Doadora -> 403 SEM_PERMISSAO
+        (a Empresa Doadora não consta entre os perfis que cadastram usuários na RN02; DP-18).
+        Devolve apenas contas com o mesmo id_organizacao do token/banco; nunca contas de terceiros.
+        Paginação padrão.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Página com os usuários da organização.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginaUsuarios' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+    post:
+      tags: [Usuários da organização (Cliente Empresa e Cliente ONG)]
+      operationId: criarUsuarioDaOrganizacao
+      summary: Adicionar usuário à própria organização (UC03, UC26)
+      description: |
+        Perfis autorizados: Cliente Empresa e Cliente ONG (RN02, RN04). Pré-condição: organização da conta ativa
+        (senão 403 CONTA_INATIVA já na autenticação).
+        O perfil e a organização do novo usuário são HERDADOS da conta que cadastra; o corpo informa só nome, e-mail e senha.
+        Se o corpo trouxer `perfil` diferente do herdado ou `id_organizacao` diferente da própria organização
+        (UC03 FE2, "conceder perfil administrativo" ou "vincular outra organização"), a operação é negada com
+        403 OPERACAO_NAO_PERMITIDA e nenhuma conta é criada. Campos iguais aos herdados são aceitos e ignorados.
+        Erros: 400 DADOS_INVALIDOS (UC03 FE1), 409 EMAIL_DUPLICADO (UC03 FE1, UC26 FE1), 403.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UsuarioOrganizacaoCriar' }
+            example: { nome: João Lima, email: joao@empresa.com, senha: SenhaForte123 }
+      responses:
+        '201':
+          description: Conta criada na mesma organização e com o mesmo perfil de quem cadastrou.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuario' }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403':
+          description: Perfil sem permissão (SEM_PERMISSAO) ou tentativa de perfil/organização de terceiros (OPERACAO_NAO_PERMITIDA, UC03 FE2).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Erro' }
+              example:
+                codigo: OPERACAO_NAO_PERMITIDA
+                mensagem: Você só pode cadastrar usuários da sua própria organização, com o mesmo perfil.
+                campos: { id_organizacao: não permitido }
+        '409': { $ref: '#/components/responses/EmailDuplicado' }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  responses:
+    NaoAutenticado:
+      description: Token ausente, inválido ou expirado (NAO_AUTENTICADO).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    SemPermissao:
+      description: Perfil sem autorização para a rota (SEM_PERMISSAO) ou conta inativa (CONTA_INATIVA).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example: { codigo: SEM_PERMISSAO, mensagem: Você não tem permissão para esta operação., campos: {} }
+    DadosInvalidos:
+      description: Campos obrigatórios ausentes ou formato inválido (DADOS_INVALIDOS, RNF04). `campos` indica cada erro.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example:
+            codigo: DADOS_INVALIDOS
+            mensagem: Dados inválidos. Corrija os campos indicados.
+            campos: { senha: mínimo de 8 caracteres }
+    EmailDuplicado:
+      description: E-mail já associado a outra conta (EMAIL_DUPLICADO; UC26 FE1).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example:
+            codigo: EMAIL_DUPLICADO
+            mensagem: Este e-mail já está em uso.
+            campos: { email: duplicado }
+    NaoEncontrado:
+      description: Usuário inexistente (NAO_ENCONTRADO).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    RegraViolada:
+      description: |
+        Regra de negócio violada: ORGANIZACAO_INVALIDA (inexistente/inativa, UC02 FE2), VINCULO_INVALIDO
+        (perfil x organização, UC27), ALTERACAO_BLOQUEADA (RN02 M1).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example:
+            codigo: ORGANIZACAO_INVALIDA
+            mensagem: A organização informada não existe ou está inativa.
+            campos: { id_organizacao: inexistente ou inativa }
+
+  schemas:
+    Perfil:
+      type: string
+      enum: [Administrador, Funcionário, Cliente Empresa, Cliente ONG, Empresa Doadora]
+    TipoOrganizacao:
+      type: string
+      enum: [Cliente Empresa, Cliente ONG, Empresa Doadora]
+    PerfilAtribuivel:
+      type: object
+      required: [perfil, exige_organizacao, tipo_organizacao]
+      properties:
+        perfil: { $ref: '#/components/schemas/Perfil' }
+        exige_organizacao: { type: boolean }
+        tipo_organizacao: { allOf: [{ $ref: '#/components/schemas/TipoOrganizacao' }], nullable: true }
+    OrganizacaoOpcao:
+      type: object
+      required: [id_organizacao, nome_razao_social, tipo]
+      properties:
+        id_organizacao: { type: integer }
+        nome_razao_social: { type: string }
+        tipo: { $ref: '#/components/schemas/TipoOrganizacao' }
+    UsuarioCriar:
+      type: object
+      required: [nome, email, senha, perfil]
+      properties:
+        nome: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 254 }
+        senha: { type: string, format: password, minLength: 8, maxLength: 128 }
+        perfil: { $ref: '#/components/schemas/Perfil' }
+        id_organizacao: { type: integer, nullable: true, description: Obrigatório para Cliente Empresa, Cliente ONG e Empresa Doadora; deve ser nulo/ausente para Administrador e Funcionário. }
+    UsuarioAlterar:
+      type: object
+      required: [nome, email, perfil]
+      properties:
+        nome: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 254 }
+        senha: { type: string, format: password, minLength: 8, maxLength: 128, description: Opcional; se ausente mantém a senha atual. }
+        perfil: { $ref: '#/components/schemas/Perfil' }
+        id_organizacao: { type: integer, nullable: true }
+    UsuarioOrganizacaoCriar:
+      type: object
+      required: [nome, email, senha]
+      properties:
+        nome: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 254 }
+        senha: { type: string, format: password, minLength: 8, maxLength: 128 }
+        perfil: { allOf: [{ $ref: '#/components/schemas/Perfil' }], description: Opcional; só aceito se igual ao perfil de quem cadastra (senão 403). }
+        id_organizacao: { type: integer, description: Opcional; só aceito se igual à própria organização (senão 403). }
+    Usuario:
+      type: object
+      description: Nunca contém senha nem senha_hash (RNF03).
+      required: [id_usuario, nome, email, perfil, id_organizacao, nome_organizacao, funcionalidades]
+      properties:
+        id_usuario: { type: integer }
+        nome: { type: string }
+        email: { type: string, format: email }
+        perfil: { $ref: '#/components/schemas/Perfil' }
+        id_organizacao: { type: integer, nullable: true }
+        nome_organizacao: { type: string, nullable: true }
+        funcionalidades:
+          type: array
+          description: Funcionalidades atribuídas ao perfil (matriz do Módulo 0), para confirmar as permissões (UC02 passo 6).
+          items: { type: string }
+    PaginaUsuarios:
+      type: object
+      required: [items, total, page, size]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Usuario' } }
+        total: { type: integer }
+        page: { type: integer }
+        size: { type: integer }
+    Erro:
+      type: object
+      required: [codigo, mensagem, campos]
+      properties:
+        codigo: { type: string }
+        mensagem: { type: string }
+        campos: { type: object, additionalProperties: { type: string } }
+
+# Matriz de permissões por rota (RN01, RN02, RN03, RN04, RNF05)
+x-permissoes:
+  GET  /usuarios/perfis-atribuiveis: [Administrador]
+  GET  /usuarios/opcoes-organizacao: [Administrador]
+  GET  /usuarios: [Administrador]
+  POST /usuarios: [Administrador]
+  GET  /usuarios/{id_usuario}: [Administrador]
+  PUT  /usuarios/{id_usuario}: [Administrador]
+  DELETE /usuarios/{id_usuario}: [Administrador]
+  DELETE /usuarios/me: [todos os perfis autenticados]   # DP-64
+  PATCH  /usuarios/me: [todos os perfis autenticados]   # DP-95, DP-101
+  PUT    /usuarios/me/senha: [todos os perfis autenticados]   # DP-96, DP-101
+  GET  /organizacao/usuarios: [Cliente Empresa, Cliente ONG]
+  POST /organizacao/usuarios: [Cliente Empresa, Cliente ONG]
+# Funcionário e Empresa Doadora não acessam nenhuma rota deste módulo (RN03; DP-18).
+
+x-codigos-erro:
+  EMAIL_DUPLICADO: "409"
+  ORGANIZACAO_INVALIDA: "422"
+  VINCULO_INVALIDO: "422"
+  ALTERACAO_BLOQUEADA: "422"
+  SENHA_INVALIDA: "401"   # DP-64
+  SENHA_IGUAL_ATUAL: "422"   # DP-97
+  OPERACAO_NAO_PERMITIDA: "403"
+  NAO_ENCONTRADO: "404"

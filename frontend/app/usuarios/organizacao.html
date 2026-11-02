@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<!-- UC03 Cadastrar usuário da própria organização (inclui UC26); RF02, RF04, RF09, RN02, RN04, RN09, RNF04, RNF05.
+     Fluxo principal: Adicionar usuário -> nome, e-mail, senha -> salvar -> confirma.
+     FA1 consultar usuários da própria organização (somente leitura: alterar/excluir é do Administrador, UC02).
+     FE1 e-mail duplicado/dados inválidos; FE2 tentativa de outro perfil/organização (403 OPERACAO_NAO_PERMITIDA).
+     Perfil e organização são herdados de quem cadastra: a tela não tem esses campos.
+     Só Cliente Empresa e Cliente ONG (a API e o layout negam os demais). -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeafTi - Usuários da organização</title>
+  <link rel="shortcut icon" href="../../images/logosemfundo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/identidade.css">
+  <link rel="stylesheet" href="../../css/app.css">
+  <link rel="stylesheet" href="../../css/usuarios.css">
+</head>
+<body class="app">
+  <a class="pular-conteudo" href="#conteudo-app">Pular para o conteúdo</a>
+  <header id="app-cabecalho"></header>
+
+  <main class="container py-4" id="conteudo-app" tabindex="-1" hidden>
+    <div id="area-org">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h2 m-0">Usuários da organização</h1>
+        <button type="button" class="btn btn-success fw-semibold" id="btn-adicionar" aria-expanded="false" aria-controls="secao-form">+ Adicionar usuário</button>
+      </div>
+
+      <div id="mensagem" class="alert d-none" aria-live="polite"></div>
+
+      <section class="cartao-app mb-3" id="secao-form" aria-labelledby="titulo-form" hidden>
+        <h2 class="h5" id="titulo-form">Adicionar usuário</h2>
+        <p>O novo usuário será da sua organização e terá o mesmo perfil que o seu (<strong id="perfil-herdado"></strong>). Não é possível conceder perfil administrativo.</p>
+        <div id="msg-form" class="alert d-none"></div>
+        <form id="form-usuario" novalidate>
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="f-nome">Nome <span aria-hidden="true">*</span></label>
+              <input type="text" class="form-control" id="f-nome" maxlength="120" autocomplete="off" aria-describedby="f-nome-erro" required>
+              <div id="f-nome-erro" class="invalid-feedback"></div>
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="f-email">E-mail <span aria-hidden="true">*</span></label>
+              <input type="email" class="form-control" id="f-email" maxlength="254" inputmode="email" autocomplete="off" aria-describedby="f-email-erro" required>
+              <div id="f-email-erro" class="invalid-feedback"></div>
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="f-senha">Senha <span aria-hidden="true">*</span></label>
+              <input type="password" class="form-control" id="f-senha" maxlength="128" autocomplete="new-password" aria-describedby="f-senha-dica f-senha-erro" required>
+              <div id="f-senha-dica" class="dica-campo">De 8 a 128 caracteres.</div>
+              <div id="f-senha-erro" class="invalid-feedback"></div>
+            </div>
+          </div>
+          <div class="d-flex flex-wrap gap-2 mt-3">
+            <button type="submit" class="btn btn-success fw-semibold" id="btn-salvar">Salvar</button>
+            <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-cancelar">Cancelar</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="cartao-app" aria-labelledby="titulo-lista">
+        <h2 class="h5" id="titulo-lista">Usuários da sua organização</h2>
+        <p id="estado-lista" class="mb-2" role="status">Carregando...</p>
+        <table class="table table-hover tabela-usuarios mb-3" id="tabela" hidden>
+          <caption class="visually-hidden">Usuários da própria organização</caption>
+          <thead>
+            <tr><th scope="col">Nome</th><th scope="col">E-mail</th><th scope="col">Perfil</th><th scope="col">Organização</th></tr>
+          </thead>
+          <tbody id="corpo-tabela"></tbody>
+        </table>
+        <nav class="d-flex flex-wrap align-items-center gap-2" aria-label="Paginação da lista" id="paginacao" hidden>
+          <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-anterior">Anterior</button>
+          <span id="texto-pagina" aria-live="polite"></span>
+          <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-proxima">Próxima</button>
+        </nav>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">LEAF TI &middot; Informação Sustentável</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="../../js/api.js"></script>
+  <script src="../../js/layout.js"></script>
+  <script src="../../js/usuarios-comum.js"></script>
+  <script src="../../js/usuarios-organizacao.js"></script>
+</body>
+</html>

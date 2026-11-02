@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<!-- UC22 Emitir relatório de vendas (RF16; RN16), UC23 Emitir relatório de equipamentos (RF17; RN17),
+     UC24 Emitir relatório de Empresas Doadoras, empresas e ONGs (RF18, RF21; RN18, RN21). RNF05.
+     Perfis Administrador e Funcionário (menu `relatorios`); somente leitura.
+     UC22: período obrigatório; FA1 sem vendas -> total zero; FE1 período inválido -> mensagem e correção.
+     UC23: filtros categoria, situação e período de cadastro; FA1 sem filtros; FE1 filtros inválidos.
+     UC24: solicitações com itens, condição e destinação; FA1 pendências destacadas; FA2 reciclagem sem venda/doação;
+           FE1 dados incompletos sinalizados, destinação não registrada nunca aparece como concluída. -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeafTi - Relatórios</title>
+  <link rel="shortcut icon" href="../../images/logosemfundo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/identidade.css">
+  <link rel="stylesheet" href="../../css/app.css">
+  <link rel="stylesheet" href="../../css/usuarios.css">
+  <link rel="stylesheet" href="../../css/organizacoes.css">
+  <link rel="stylesheet" href="../../css/equipamentos.css">
+  <link rel="stylesheet" href="../../css/solicitacoes.css">
+  <link rel="stylesheet" href="../../css/relatorios.css">
+</head>
+<body class="app">
+  <a class="pular-conteudo" href="#conteudo-app">Pular para o conteúdo</a>
+  <header id="app-cabecalho"></header>
+
+  <main class="container py-4" id="conteudo-app" tabindex="-1" hidden>
+    <div id="area-relatorios">
+      <h1 class="h2 vista-titulo mb-2">Relatórios gerenciais</h1>
+      <p class="dica-campo">Consulta de vendas, equipamentos e solicitações das Empresas Doadoras. Somente leitura.</p>
+
+      <ul class="nav nav-tabs mb-3" id="abas" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="aba-vendas" data-bs-toggle="tab" data-bs-target="#painel-vendas" type="button" role="tab" aria-controls="painel-vendas" aria-selected="true">Vendas</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="aba-equip" data-bs-toggle="tab" data-bs-target="#painel-equip" type="button" role="tab" aria-controls="painel-equip" aria-selected="false">Equipamentos</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="aba-org" data-bs-toggle="tab" data-bs-target="#painel-org" type="button" role="tab" aria-controls="painel-org" aria-selected="false">Organizações e destinações</button>
+        </li>
+      </ul>
+
+      <div class="tab-content">
+        <!-- UC22 Relatório de vendas -->
+        <section class="tab-pane fade show active" id="painel-vendas" role="tabpanel" aria-labelledby="aba-vendas" tabindex="0">
+          <div class="cartao-app mb-3">
+            <h2 class="h5">Vendas confirmadas por período</h2>
+            <p class="dica-campo">Apenas vendas confirmadas entram no relatório. * campo obrigatório</p>
+            <form id="form-vendas" class="row g-3 align-items-end" novalidate>
+              <div class="col-12 col-md-4 col-xl-3">
+                <label class="form-label" for="v-de">Data inicial <span aria-hidden="true">*</span></label>
+                <input type="date" class="form-control" id="v-de" aria-describedby="v-de-erro" required>
+                <div id="v-de-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-4 col-xl-3">
+                <label class="form-label" for="v-ate">Data final <span aria-hidden="true">*</span></label>
+                <input type="date" class="form-control" id="v-ate" aria-describedby="v-ate-erro" required>
+                <div id="v-ate-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-4 col-xl-3">
+                <button type="submit" class="btn btn-success fw-semibold w-100">Emitir relatório</button>
+              </div>
+            </form>
+          </div>
+          <div id="msg-vendas" class="alert d-none" role="alert"></div>
+          <div id="res-vendas"></div>
+        </section>
+
+        <!-- UC23 Relatório de equipamentos -->
+        <section class="tab-pane fade" id="painel-equip" role="tabpanel" aria-labelledby="aba-equip" tabindex="0">
+          <div class="cartao-app mb-3">
+            <h2 class="h5">Equipamentos cadastrados</h2>
+            <p class="dica-campo">Sem filtros, todos os equipamentos são exibidos.</p>
+            <form id="form-equip" class="row g-3 align-items-end" novalidate>
+              <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="e-cat">Categoria</label>
+                <select class="form-select" id="e-cat" aria-describedby="e-cat-erro"><option value="">Todas as categorias</option></select>
+                <div id="e-cat-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="e-sit">Situação</label>
+                <select class="form-select" id="e-sit" aria-describedby="e-sit-erro"><option value="">Todas as situações</option></select>
+                <div id="e-sit-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6 col-xl-2">
+                <label class="form-label" for="e-de">Cadastro a partir de</label>
+                <input type="date" class="form-control" id="e-de" aria-describedby="e-de-erro">
+                <div id="e-de-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6 col-xl-2">
+                <label class="form-label" for="e-ate">Cadastro até</label>
+                <input type="date" class="form-control" id="e-ate" aria-describedby="e-ate-erro">
+                <div id="e-ate-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-xl-2 d-flex gap-2">
+                <button type="submit" class="btn btn-success fw-semibold flex-fill">Emitir</button>
+                <button type="button" class="btn btn-outline-leaf fw-semibold flex-fill" id="e-limpar">Limpar</button>
+              </div>
+            </form>
+          </div>
+          <div id="msg-equip" class="alert d-none" role="alert"></div>
+          <div id="res-equip"></div>
+        </section>
+
+        <!-- UC24 Relatório de Empresas Doadoras, empresas e ONGs -->
+        <section class="tab-pane fade" id="painel-org" role="tabpanel" aria-labelledby="aba-org" tabindex="0">
+          <div class="cartao-app mb-3">
+            <h2 class="h5">Solicitações e destinações</h2>
+            <p class="dica-campo">Todas as solicitações aparecem, mesmo sem avaliação ou destinação final.</p>
+            <form id="form-org" class="row g-3 align-items-end" novalidate>
+              <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="o-emp">Empresa Doadora</label>
+                <select class="form-select" id="o-emp" aria-describedby="o-emp-erro"><option value="">Todas as empresas</option></select>
+                <div id="o-emp-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="o-sit">Situação da solicitação</label>
+                <select class="form-select" id="o-sit" aria-describedby="o-sit-erro"><option value="">Todas as situações</option></select>
+                <div id="o-sit-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6 col-xl-2">
+                <label class="form-label" for="o-de">Solicitada a partir de</label>
+                <input type="date" class="form-control" id="o-de" aria-describedby="o-de-erro">
+                <div id="o-de-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6 col-xl-2">
+                <label class="form-label" for="o-ate">Solicitada até</label>
+                <input type="date" class="form-control" id="o-ate" aria-describedby="o-ate-erro">
+                <div id="o-ate-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-xl-2 d-flex gap-2">
+                <button type="submit" class="btn btn-success fw-semibold flex-fill">Emitir</button>
+                <button type="button" class="btn btn-outline-leaf fw-semibold flex-fill" id="o-limpar">Limpar</button>
+              </div>
+            </form>
+          </div>
+          <div id="msg-org" class="alert d-none" role="alert"></div>
+          <div id="res-org"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">LEAF TI &middot; Informação Sustentável</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="../../js/api.js"></script>
+  <script src="../../js/layout.js"></script>
+  <script src="../../js/relatorios.js"></script>
+</body>
+</html>

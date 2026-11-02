@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<!-- UC07 Manter cadastro de equipamentos (RF08, RF11; RN08, RN11; RNF04) e UC08 Atualizar situação do equipamento (RF12; RN12).
+     Administrador e Funcionário (menu `equipamentos`).
+     UC07 fluxo principal: Novo equipamento -> identificação, categoria (só ativas), modelo, condição, origem, data de recebimento,
+       valor opcional, item de solicitação opcional, situação -> salvar. FA1 consultar/alterar (categoria desativada já vinculada
+       permanece; só se escolhe ativa ao mudar). FA2 desativar/reativar com confirmação. FE1 identificação duplicada, categoria
+       inválida, dados inválidos; FE2 equipamento finalizado (vendido/doado: somente leitura); FE3 condição incompatível com a situação.
+     UC08 fluxo principal: Atualizar situação -> situações permitidas (sem Vendido) -> se Doado, ONG (Cliente ONG ativa) e data
+       da doação. FE1 dados da doação ausentes; FE2 sem condições de reuso; FE3 transição não permitida. -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeafTi - Equipamentos</title>
+  <link rel="shortcut icon" href="../../images/logosemfundo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/identidade.css">
+  <link rel="stylesheet" href="../../css/app.css">
+  <link rel="stylesheet" href="../../css/usuarios.css">
+  <link rel="stylesheet" href="../../css/organizacoes.css">
+  <link rel="stylesheet" href="../../css/equipamentos.css">
+</head>
+<body class="app">
+  <a class="pular-conteudo" href="#conteudo-app">Pular para o conteúdo</a>
+  <header id="app-cabecalho"></header>
+
+  <main class="container py-4" id="conteudo-app" tabindex="-1" hidden>
+    <div id="area-eq">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h2 m-0">Equipamentos</h1>
+        <button type="button" class="btn btn-success fw-semibold" id="btn-novo">+ Novo equipamento</button>
+      </div>
+
+      <div id="mensagem" class="alert d-none" aria-live="polite"></div>
+
+      <section class="cartao-app mb-3" aria-labelledby="titulo-filtros">
+        <h2 class="h5" id="titulo-filtros">Filtrar equipamentos</h2>
+        <form id="form-filtros" class="row g-3 align-items-end" novalidate>
+          <div class="col-12 col-md-6 col-xl-4">
+            <label class="form-label" for="filtro-q">Identificação ou modelo</label>
+            <input type="search" class="form-control" id="filtro-q" maxlength="150" placeholder="Digite parte da identificação ou do modelo">
+          </div>
+          <div class="col-12 col-md-6 col-xl-4">
+            <label class="form-label" for="filtro-categoria">Categoria</label>
+            <select class="form-select" id="filtro-categoria"><option value="">Todas as categorias</option></select>
+          </div>
+          <div class="col-12 col-md-6 col-xl-4">
+            <label class="form-label" for="filtro-situacao">Situação</label>
+            <select class="form-select" id="filtro-situacao"><option value="">Todas as situações</option></select>
+          </div>
+          <div class="col-12 col-md-6 col-xl-4">
+            <label class="form-label" for="filtro-condicao">Condição</label>
+            <select class="form-select" id="filtro-condicao"><option value="">Todas as condições</option></select>
+          </div>
+          <div class="col-12 col-md-6 col-xl-4">
+            <label class="form-label" for="filtro-ativo">Cadastro</label>
+            <select class="form-select" id="filtro-ativo">
+              <option value="">Ativos e inativos</option>
+              <option value="true">Somente ativos</option>
+              <option value="false">Somente inativos</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-6 col-xl-2">
+            <label class="form-label" for="filtro-de">Recebido de</label>
+            <input type="date" class="form-control" id="filtro-de" aria-describedby="filtro-de-erro">
+            <div id="filtro-de-erro" class="invalid-feedback"></div>
+          </div>
+          <div class="col-12 col-md-6 col-xl-2">
+            <label class="form-label" for="filtro-ate">Recebido até</label>
+            <input type="date" class="form-control" id="filtro-ate" aria-describedby="filtro-ate-erro">
+            <div id="filtro-ate-erro" class="invalid-feedback"></div>
+          </div>
+          <div class="col-12 d-flex gap-2 flex-wrap">
+            <button type="submit" class="btn btn-success fw-semibold">Filtrar</button>
+            <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-limpar">Limpar</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="cartao-app" aria-labelledby="titulo-lista">
+        <h2 class="h5" id="titulo-lista">Lista de equipamentos</h2>
+        <p id="estado-lista" class="mb-2" role="status">Carregando...</p>
+        <div class="table-responsive">
+        <table role="table" class="table table-hover tabela-usuarios tabela-equip mb-3" id="tabela" hidden>
+          <caption class="visually-hidden">Equipamentos cadastrados</caption>
+          <thead role="rowgroup">
+            <tr role="row"><th role="columnheader" scope="col">Imagem</th><th role="columnheader" scope="col">Identificação</th><th role="columnheader" scope="col">Modelo</th><th role="columnheader" scope="col">Condição</th><th role="columnheader" scope="col">Situação</th><th role="columnheader" scope="col">Valor</th><th role="columnheader" scope="col">Recebimento</th><th role="columnheader" scope="col">Ações</th></tr>
+          </thead>
+          <tbody role="rowgroup" id="corpo-tabela"></tbody>
+        </table>
+        </div>
+        <nav class="d-flex flex-wrap align-items-center gap-2" aria-label="Paginação da lista" id="paginacao" hidden>
+          <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-anterior">Anterior</button>
+          <span id="texto-pagina" aria-live="polite"></span>
+          <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-proxima">Próxima</button>
+        </nav>
+      </section>
+    </div>
+  </main>
+
+  <!-- Formulário: cadastro (UC07 passos 2 a 4), alteração (FA1) ou somente leitura (vendido/doado) -->
+  <div class="modal fade" id="modal-form" tabindex="-1" aria-labelledby="modal-form-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+      <div class="modal-content">
+        <form id="form-eq" novalidate>
+          <div class="modal-header">
+            <h2 class="modal-title h4" id="modal-form-titulo">Novo equipamento</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          </div>
+          <div class="modal-body">
+            <div id="msg-form" class="alert d-none"></div>
+            <p id="dica-form" class="dica-campo" hidden></p>
+            <p class="dica-campo mb-2">* campo obrigatório</p>
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="f-identificacao">Identificação <span aria-hidden="true">*</span></label>
+                <input type="text" class="form-control" id="f-identificacao" maxlength="50" autocomplete="off" aria-describedby="f-identificacao-dica f-identificacao-erro" required>
+                <div id="f-identificacao-dica" class="dica-campo">Até 50 caracteres. Deve ser única (maiúsculas e minúsculas não diferenciam).</div>
+                <div id="f-identificacao-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="f-categoria">Categoria <span aria-hidden="true">*</span></label>
+                <select class="form-select" id="f-categoria" aria-describedby="f-categoria-dica f-categoria-erro" required></select>
+                <div id="f-categoria-dica" class="dica-campo">Somente categorias ativas podem ser escolhidas.</div>
+                <div id="f-categoria-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="f-modelo">Modelo ou descrição <span aria-hidden="true">*</span></label>
+                <input type="text" class="form-control" id="f-modelo" maxlength="150" autocomplete="off" aria-describedby="f-modelo-erro" required>
+                <div id="f-modelo-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="f-condicao">Condição <span aria-hidden="true">*</span></label>
+                <select class="form-select" id="f-condicao" aria-describedby="f-condicao-erro" required></select>
+                <div id="f-condicao-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="f-origem">Origem <span aria-hidden="true">*</span></label>
+                <input type="text" class="form-control" id="f-origem" maxlength="100" autocomplete="off" aria-describedby="f-origem-dica f-origem-erro" required>
+                <div id="f-origem-dica" class="dica-campo">Texto livre, por exemplo o nome da empresa doadora.</div>
+                <div id="f-origem-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="f-data">Data de recebimento <span aria-hidden="true">*</span></label>
+                <input type="date" class="form-control" id="f-data" aria-describedby="f-data-dica f-data-erro" required>
+                <div id="f-data-dica" class="dica-campo">Não pode ser uma data futura.</div>
+                <div id="f-data-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="f-valor">Valor (R$)</label>
+                <input type="text" class="form-control" id="f-valor" maxlength="14" inputmode="decimal" autocomplete="off" aria-describedby="f-valor-dica f-valor-erro">
+                <div id="f-valor-dica" class="dica-campo">Opcional. Sem valor negativo e com até 2 casas decimais (ex.: 1500,00).</div>
+                <div id="f-valor-erro" class="invalid-feedback"></div>
+              </div>
+              <!-- UC07 passo 4: vínculo opcional por seletores encadeados (solicitação -> item); DP-52: item completo é recusado pela API. Escondido se o perfil não lista solicitações. -->
+              <div class="col-12 col-md-6" id="bloco-item">
+                <label class="form-label" for="f-solicitacao">Solicitação de origem</label>
+                <select class="form-select" id="f-solicitacao" aria-describedby="f-item-dica"></select>
+                <label class="form-label mt-2" for="f-item">Item da solicitação</label>
+                <select class="form-select" id="f-item" aria-describedby="f-item-dica f-item-erro"></select>
+                <div id="f-item-dica" class="dica-campo">Opcional. Escolha a solicitação e depois o item. Itens com todas as unidades já cadastradas aparecem indisponíveis. Para avaliar uma solicitação, use a <a href="../avaliacao/index.html">tela de avaliação</a>.</div>
+                <div id="f-item-erro" class="invalid-feedback"></div>
+              </div>
+              <!-- UC07 (DP-84, DP-85): imagem opcional do produto; JPG, PNG ou WebP até 2 MB; pré-visualização antes de salvar -->
+              <div class="col-12" id="bloco-imagem">
+                <label class="form-label d-block" id="f-imagem-rotulo" for="f-imagem">Imagem do produto</label>
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                  <div class="previa-imagem" id="previa-imagem"><span class="previa-vazia" id="previa-vazia">Sem imagem</span></div>
+                  <div class="d-flex flex-wrap gap-2">
+                    <input type="file" id="f-imagem" class="d-none" accept="image/jpeg,image/png,image/webp" aria-describedby="f-imagem-dica f-imagem-erro" tabindex="-1">
+                    <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-escolher-imagem" aria-describedby="f-imagem-rotulo">Escolher imagem</button>
+                    <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-remover-imagem" hidden>Remover imagem</button>
+                  </div>
+                </div>
+                <div id="f-imagem-dica" class="dica-campo">Opcional. JPG, PNG ou WebP, até 2 MB.</div>
+                <div id="f-imagem-erro" class="invalid-feedback d-block" hidden></div>
+              </div>
+              <div class="col-12 col-md-6" id="bloco-situacao-nova">
+                <label class="form-label" for="f-situacao">Situação inicial</label>
+                <select class="form-select" id="f-situacao" aria-describedby="f-situacao-dica f-situacao-erro"></select>
+                <div id="f-situacao-dica" class="dica-campo">Vendido e Doado não podem ser escolhidos aqui. Depois, use Atualizar situação.</div>
+                <div id="f-situacao-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6" id="bloco-situacao-atual" hidden>
+                <p class="mb-1"><strong>Situação:</strong> <span id="situacao-atual"></span></p>
+                <p class="mb-0"><strong>Cadastro:</strong> <span id="ativo-atual"></span></p>
+              </div>
+              <div class="col-12" id="bloco-doacao-leitura" hidden>
+                <div class="dados-leitura"><dl>
+                  <dt>ONG beneficiada</dt><dd id="leitura-ong"></dd>
+                  <dt>Data da doação</dt><dd id="leitura-data-doacao"></dd>
+                </dl></div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-leaf fw-semibold" data-bs-dismiss="modal" id="btn-cancelar">Cancelar</button>
+            <!-- UC08 passo 1: atalho a partir da edição (só equipamento não finalizado) -->
+            <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-situacao-form" hidden>Atualizar situação</button>
+            <button type="submit" class="btn btn-success fw-semibold" id="btn-salvar">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Atualizar situação (UC08) -->
+  <div class="modal fade" id="modal-sit" tabindex="-1" aria-labelledby="modal-sit-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+      <div class="modal-content">
+        <form id="form-sit" novalidate>
+          <div class="modal-header">
+            <h2 class="modal-title h4" id="modal-sit-titulo">Atualizar situação</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          </div>
+          <div class="modal-body">
+            <div id="msg-sit" class="alert d-none"></div>
+            <p class="mb-2"><strong>Equipamento:</strong> <span id="sit-equipamento"></span></p>
+            <p class="mb-3"><strong>Situação atual:</strong> <span id="sit-atual"></span> &middot; <strong>Condição:</strong> <span id="sit-condicao"></span></p>
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="s-situacao">Nova situação <span aria-hidden="true">*</span></label>
+                <select class="form-select" id="s-situacao" aria-describedby="s-situacao-erro" required></select>
+                <div id="s-situacao-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12">
+                <details id="sit-motivos" class="dica-campo" hidden>
+                  <summary>Por que algumas situações não aparecem?</summary>
+                  <ul class="lista-motivos" id="sit-motivos-lista"></ul>
+                </details>
+              </div>
+              <div class="col-12" id="bloco-doacao" hidden>
+                <fieldset class="bloco-doacao">
+                  <legend class="h6">Dados da doação (obrigatórios para Doado)</legend>
+                  <div class="row g-3">
+                    <div class="col-12">
+                      <label class="form-label" for="s-busca-ong">Buscar ONG pelo nome ou CNPJ</label>
+                      <input type="search" class="form-control" id="s-busca-ong" maxlength="150" autocomplete="off" aria-describedby="s-busca-ong-dica">
+                      <div id="s-busca-ong-dica" class="dica-campo" role="status"></div>
+                    </div>
+                    <div class="col-12 col-md-7">
+                      <label class="form-label" for="s-ong">ONG beneficiada <span aria-hidden="true">*</span></label>
+                      <select class="form-select" id="s-ong" aria-describedby="s-ong-erro"></select>
+                      <div id="s-ong-erro" class="invalid-feedback"></div>
+                    </div>
+                    <div class="col-12 col-md-5">
+                      <label class="form-label" for="s-data">Data da doação <span aria-hidden="true">*</span></label>
+                      <input type="date" class="form-control" id="s-data" aria-describedby="s-data-dica s-data-erro">
+                      <div id="s-data-dica" class="dica-campo">Não futura e não anterior ao recebimento.</div>
+                      <div id="s-data-erro" class="invalid-feedback"></div>
+                    </div>
+                  </div>
+                </fieldset>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-leaf fw-semibold" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-success fw-semibold" id="btn-salvar-sit">Salvar situação</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmação de desativar/reativar (UC07 FA2); foco inicial no Cancelar (ação segura) -->
+  <div class="modal fade" id="modal-ativo" tabindex="-1" aria-labelledby="modal-ativo-titulo" aria-describedby="modal-ativo-texto" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title h4" id="modal-ativo-titulo">Desativar equipamento</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div id="msg-ativo" class="alert d-none"></div>
+          <p id="modal-ativo-texto" class="mb-0"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-leaf fw-semibold" data-bs-dismiss="modal" id="btn-nao-ativo">Cancelar</button>
+          <button type="button" class="btn btn-success fw-semibold" id="btn-confirmar-ativo">Sim, desativar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">LEAF TI &middot; Informação Sustentável</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="../../js/api.js"></script>
+  <script src="../../js/layout.js"></script>
+  <script src="../../js/usuarios-comum.js"></script>
+  <script src="../../js/organizacoes-comum.js"></script>
+  <script src="../../js/equipamentos-comum.js"></script>
+  <script src="../../js/equipamentos.js"></script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+/* Identidade visual LEAF TI - ver docs/IDENTIDADE_VISUAL.md
+   Carregar DEPOIS do Bootstrap e antes dos CSS de cada página. */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Source+Sans+3:wght@400;600&display=swap');
+
+:root {
+  --leaf-green: #76D356;
+  --leaf-green-dark: #31573F;
+  --leaf-blue: #4A90E2;
+  --leaf-gray: #505050;
+  --leaf-white: #FFFFFF;
+  --leaf-yellow: #FFC300;
+
+  /* DP-10: derivações da marca (tons claros do verde e hover do verde escuro) */
+  --leaf-green-tint: #F3F8F1;
+  --leaf-green-tint-2: #D9E6DD;
+  --leaf-green-dark-hover: #24402F;
+  --leaf-yellow-tint: #FFF6D6; /* fundo claro do amarelo para avisos não críticos (DP-11a) */
+  --leaf-erro: #9B1C1C;        /* EXCEÇÃO aprovada (DP-06 revista): só mensagens de erro; 7,3:1 sobre #FDF0F0 */
+  --leaf-erro-tint: #FDF0F0;
+
+  --font-titulo: 'Playfair Display', Georgia, serif;
+  --font-texto: 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+
+  /* Mapeia o Bootstrap para a marca */
+  --bs-body-font-family: var(--font-texto);
+  --bs-body-font-size: 1rem;           /* 16 px (RNF01) */
+  --bs-body-color: var(--leaf-gray);
+  --bs-link-color: var(--leaf-green-dark);
+  --bs-link-color-rgb: 49, 87, 63;
+  --bs-link-hover-color-rgb: 36, 64, 47;
+  --bs-heading-color: var(--leaf-green-dark);
+  --bs-link-hover-color: var(--leaf-green-dark-hover);
+}
+
+body { font-family: var(--font-texto); font-size: 1rem; color: var(--leaf-gray); }
+h1, h2, h3, h4, h5, h6, .navbar-brand { font-family: var(--font-titulo); color: var(--leaf-green-dark); }
+
+/* Botão principal: verde escuro com texto branco (contraste ~8:1) */
+.btn-success, .btn-leaf {
+  --bs-btn-bg: var(--leaf-green-dark);
+  --bs-btn-border-color: var(--leaf-green-dark);
+  --bs-btn-hover-bg: var(--leaf-green-dark-hover);
+  --bs-btn-hover-border-color: var(--leaf-green-dark-hover);
+  --bs-btn-active-bg: var(--leaf-green-dark-hover);
+  --bs-btn-active-border-color: var(--leaf-green-dark-hover);
+  --bs-btn-color: var(--leaf-white);
+  /* Desabilitado ("Salvando..."): verde escuro com texto branco, opacidade alta para manter contraste >= 4,5:1 */
+  --bs-btn-disabled-bg: var(--leaf-green-dark);
+  --bs-btn-disabled-border-color: var(--leaf-green-dark);
+  --bs-btn-disabled-color: var(--leaf-white);
+  --bs-btn-disabled-opacity: .85;
+}
+.text-success { color: var(--leaf-green-dark) !important; }
+.bg-leaf-dark { background-color: var(--leaf-green-dark); color: var(--leaf-white); }
+.bg-leaf-dark .accent, .text-leaf-green { color: var(--leaf-green); }  /* verde claro só sobre fundo escuro */
+.badge-acento { background: var(--leaf-yellow); color: var(--leaf-green-dark); }
+/* Foco global (RNF06): verde escuro sobre fundo claro (>=3:1); vence o Bootstrap por especificidade. */
+:focus-visible,
+body .btn:focus-visible, body .btn-check:focus-visible + .btn,
+body .btn-close:focus-visible,
+body .form-control:focus, body .form-select:focus, body .form-check-input:focus,
+body .btn-outline-leaf:focus-visible, body .btn-excluir:focus-visible, body .btn-success:focus-visible,
+body .page-link:focus {
+  outline: 3px solid var(--leaf-green-dark) !important; outline-offset: 2px; box-shadow: none !important;
+}
+/* Sobre fundo escuro: azul não atinge 3:1; usa branco (ou verde claro #76D356) */
+.bg-leaf-dark :focus-visible, .bg-leaf-dark .btn:focus, .bg-leaf-dark .btn:focus-visible, header :focus-visible, footer :focus-visible { outline: 3px solid var(--leaf-white) !important; outline-offset: 2px; box-shadow: none !important; }
+.bg-leaf-dark .btn-light:focus-visible { outline-color: var(--leaf-white) !important; }
+.bg-leaf-dark .dropdown-menu :focus-visible { outline: 3px solid var(--leaf-green-dark) !important; outline-offset: -3px; }
+body .btn:focus, body .btn-close:focus, .navbar-toggler:focus { box-shadow: none !important; }
+
+/* Erros (DP-06 revista, exceção aprovada pelo usuário): vermelho escuro --leaf-erro, sempre com ícone e
+   prefixo "Erro:" (a informação não depende só de cor, RNF06). Avisos não críticos (.alert-warning)
+   continuam amarelos, com ícone e prefixo "Atenção:". */
+.alert-danger {
+  --bs-alert-color: var(--leaf-erro);
+  --bs-alert-bg: var(--leaf-erro-tint);
+  --bs-alert-border-color: var(--leaf-erro);
+  border-width: 2px;
+  font-weight: 600;
+}
+.alert-danger::before { content: "\26A0\FE0E\0000A0Erro: "; font-weight: 700; }
+.alert-warning {
+  --bs-alert-color: var(--leaf-green-dark);
+  --bs-alert-bg: var(--leaf-yellow-tint);
+  --bs-alert-border-color: var(--leaf-yellow);
+  border-width: 2px;
+}
+.alert-warning::before { content: "\26A0\FE0E\0000A0Atenção: "; font-weight: 700; }
+.form-control.is-invalid, .form-select.is-invalid, .was-validated .form-control:invalid {
+  border: 3px solid var(--leaf-erro);
+  background-image: none;
+  padding-right: .75rem;
+}
+.form-control.is-invalid:focus, .form-select.is-invalid, .form-select.is-invalid:focus,
+.was-validated .form-select:invalid, .was-validated .form-select:invalid:focus {
+  border: 3px solid var(--leaf-erro); box-shadow: none; background-image: var(--bs-form-select-bg-img); padding-right: 2.25rem;
+}
+.invalid-feedback, .text-danger { color: var(--leaf-erro) !important; font-weight: 600; }
+.invalid-feedback { font-size: 1rem; }
+.is-invalid ~ .invalid-feedback { display: block; }
+.invalid-feedback:not(:empty)::before, .text-danger:not(:empty)::before { content: "\2716\FE0E\0000A0"; }
+/* Ícones de texto (monocromáticos, herdam currentColor): seletor de texto FE0E + font-variant-emoji impedem o emoji colorido. */
+.alert-danger::before, .alert-warning::before, .alert-success::before,
+.invalid-feedback:not(:empty)::before, .text-danger:not(:empty)::before {
+  font-family: var(--font-texto), "Segoe UI Symbol", "DejaVu Sans", "Noto Sans Symbols 2", sans-serif;
+  font-variant-emoji: text; font-size: 1rem; color: inherit;
+}
+/* Texto de tabela e negrito herdam a cor de corpo (não o #000 do Bootstrap) */
+body, .table { --bs-table-color: var(--leaf-gray); --bs-table-hover-color: var(--leaf-gray); }
+td, th, strong, b { color: inherit; }
+/* Campos: borda de 1 px com contraste >= 3:1 sobre branco (RNF01); foco na cor da marca, contorno de 3 px acima */
+.form-control, .form-select { border: 1px solid var(--leaf-gray); }
+.form-control:focus, .form-select:focus { border-color: var(--leaf-green-dark); }
+.form-check-input { border-color: var(--leaf-gray); }
+.form-check-input:checked, .form-check-input:focus { border-color: var(--leaf-green-dark); }
+/* Desativados (global): cinza escuro #505050 sobre #F3F8F1 (7,49:1), sem depender de opacidade; borda tracejada */
+body .btn-outline-leaf:disabled, body .btn-outline-leaf.disabled,
+body .btn-excluir:disabled, body .btn-excluir.disabled,
+body .btn-acao-situacao:disabled, body .btn-acao-situacao.disabled {
+  opacity: 1; color: var(--leaf-gray); background: var(--leaf-green-tint); border: 2px dashed var(--leaf-gray);
+  cursor: not-allowed;
+}
+body .form-control:disabled, body .form-control[readonly], body .form-select:disabled {
+  background-color: var(--leaf-green-tint); color: var(--leaf-gray); opacity: 1;
+}
+.text-muted { color: var(--leaf-gray) !important; }
+a { text-decoration: underline; }
+.btn { text-decoration: none; }
+
+/* Link para pular ao conteúdo (teclado, RNF06) */
+.pular-conteudo {
+  position: absolute; left: -999px; top: 0; z-index: 2000;
+  background: var(--leaf-green-dark); color: var(--leaf-white); padding: .75rem 1rem;
+}
+.pular-conteudo:focus { left: 0; }
+/* RNF06: o azul #4A90E2 não atinge 3:1 (2,49:1). Branco sobre a barra verde escura do app;
+   verde escuro quando o fundo atrás é claro (login). */
+.pular-conteudo:focus, .pular-conteudo:focus-visible {
+  outline: 3px solid var(--leaf-white) !important; outline-offset: 2px;
+  background: var(--leaf-green-dark); color: var(--leaf-white);
+}
+body:not(.app) .pular-conteudo:focus, body:not(.app) .pular-conteudo:focus-visible { outline-color: var(--leaf-green-dark) !important; }
+
+/* M-01: botão de contorno da marca disponível também nas páginas públicas (verde escuro sobre branco, contraste >= 4,5:1) */
+.btn-outline-leaf {
+  --bs-btn-color: var(--leaf-green-dark); --bs-btn-border-color: var(--leaf-green-dark);
+  --bs-btn-hover-bg: var(--leaf-green-dark); --bs-btn-hover-color: var(--leaf-white);
+  --bs-btn-hover-border-color: var(--leaf-green-dark);
+  --bs-btn-active-bg: var(--leaf-green-dark-hover); --bs-btn-active-color: var(--leaf-white);
+  --bs-btn-active-border-color: var(--leaf-green-dark-hover);
+  --bs-btn-disabled-color: var(--leaf-gray); --bs-btn-disabled-border-color: var(--leaf-gray);
+  font-size: 1rem;
+}
+
+/* Pedido 3 / DP-89: logo do cabeçalho das páginas públicas (classe única; ~1,6x o tamanho anterior, proporção mantida) */
+.logo-cabecalho { height: 72px; width: auto; max-width: 100%; object-fit: contain; }
+@media (max-width: 575.98px) { .logo-cabecalho { height: 56px; } }
+.navbar-brand { padding-top: 0; padding-bottom: 0; }
+
+/* Pedido 2, DP-88: botao de mostrar/ocultar senha (js/senha-olho.js). Contraste verde escuro sobre branco >= 4,5:1. */
+.senha-olho { position: relative; }
+.senha-olho > .form-control { padding-right: 3rem; background-image: none; }
+.senha-olho:has(> .form-control.is-invalid) ~ .invalid-feedback { display: block; }
+.senha-olho-botao {
+  position: absolute; top: 50%; right: 0.25rem; transform: translateY(-50%);
+  width: 2.5rem; height: 2.5rem; min-width: 32px; min-height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; border: 0; border-radius: 0.375rem;
+  background: transparent; color: var(--leaf-green-dark); cursor: pointer;
+}
+.senha-olho-botao:hover { background: var(--leaf-green-tint-2); color: var(--leaf-green-dark-hover); }
+.senha-olho-botao:focus-visible { outline: 3px solid var(--leaf-green-dark); outline-offset: 1px; }

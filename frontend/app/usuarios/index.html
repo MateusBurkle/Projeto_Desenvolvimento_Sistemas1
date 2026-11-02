@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<!-- UC02 Gerenciar usuários e atribuir perfis (inclui UC26 e UC27); RF01, RF02, RN01, RN02, RN03, RNF03, RNF04, RNF05.
+     Fluxo principal: Novo usuário -> nome, e-mail, senha, perfil, organização -> salvar -> confirma permissões (passo 6).
+     FA1 alterar perfil/vínculo, FA2 alterar nome/e-mail/senha, FA3 excluir (com confirmação), FA4 listar e filtrar.
+     FE1 e-mail duplicado/dados inválidos, FE2 organização inválida, FE3 perfil/vínculo inválido, FE4 bloqueios.
+     Só o Administrador (a API e o layout negam os demais). -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeafTi - Usuários</title>
+  <link rel="shortcut icon" href="../../images/logosemfundo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/identidade.css">
+  <link rel="stylesheet" href="../../css/app.css">
+  <link rel="stylesheet" href="../../css/usuarios.css">
+</head>
+<body class="app">
+  <a class="pular-conteudo" href="#conteudo-app">Pular para o conteúdo</a>
+  <header id="app-cabecalho"></header>
+
+  <main class="container py-4" id="conteudo-app" tabindex="-1" hidden>
+    <div id="area-admin">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h2 m-0">Usuários</h1>
+        <button type="button" class="btn btn-success fw-semibold" id="btn-novo">+ Novo usuário</button>
+      </div>
+
+      <div id="mensagem" class="alert d-none" aria-live="polite"></div>
+
+      <section class="cartao-app mb-3" aria-labelledby="titulo-filtros">
+        <h2 class="h5" id="titulo-filtros">Filtrar usuários</h2>
+        <form id="form-filtros" class="row g-3 align-items-end" novalidate>
+          <div class="col-12 col-md-6 col-xl-4">
+            <label class="form-label" for="filtro-q">Nome ou e-mail</label>
+            <input type="search" class="form-control" id="filtro-q" maxlength="120" placeholder="Digite parte do nome ou do e-mail">
+          </div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <label class="form-label" for="filtro-perfil">Perfil</label>
+            <select class="form-select" id="filtro-perfil"><option value="">Todos os perfis</option></select>
+          </div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <label class="form-label" for="filtro-org">Organização</label>
+            <select class="form-select" id="filtro-org"><option value="">Todas as organizações</option></select>
+          </div>
+          <div class="col-12 col-md-6 col-xl-2 d-flex gap-2">
+            <button type="submit" class="btn btn-success fw-semibold flex-fill">Filtrar</button>
+            <button type="button" class="btn btn-outline-leaf fw-semibold flex-fill" id="btn-limpar">Limpar</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="cartao-app" aria-labelledby="titulo-lista">
+        <h2 class="h5" id="titulo-lista">Lista de usuários</h2>
+        <p id="estado-lista" class="mb-2" role="status">Carregando...</p>
+        <table class="table table-hover tabela-usuarios mb-3" id="tabela" hidden>
+          <caption class="visually-hidden">Usuários cadastrados</caption>
+          <thead>
+            <tr><th scope="col">Nome</th><th scope="col">E-mail</th><th scope="col">Perfil</th><th scope="col">Organização</th><th scope="col">Ações</th></tr>
+          </thead>
+          <tbody id="corpo-tabela"></tbody>
+        </table>
+        <nav class="d-flex flex-wrap align-items-center gap-2" aria-label="Paginação da lista" id="paginacao" hidden>
+          <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-anterior">Anterior</button>
+          <span id="texto-pagina" aria-live="polite"></span>
+          <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-proxima">Próxima</button>
+        </nav>
+      </section>
+    </div>
+  </main>
+
+  <!-- Formulário de criar/editar (UC02 passos 2 e 3, FA1, FA2; UC27 passos 1 e 2) -->
+  <div class="modal fade" id="modal-form" tabindex="-1" aria-labelledby="modal-form-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+      <div class="modal-content">
+        <form id="form-usuario" novalidate>
+          <div class="modal-header">
+            <h2 class="modal-title h4" id="modal-form-titulo">Novo usuário</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          </div>
+          <div class="modal-body">
+            <div id="msg-form" class="alert d-none"></div>
+            <div id="resultado" class="d-none"></div>
+            <div id="campos-form" class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="f-nome">Nome <span aria-hidden="true">*</span></label>
+                <input type="text" class="form-control" id="f-nome" maxlength="120" autocomplete="off" aria-describedby="f-nome-erro" required>
+                <div id="f-nome-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="f-email">E-mail <span aria-hidden="true">*</span></label>
+                <input type="email" class="form-control" id="f-email" maxlength="254" inputmode="email" autocomplete="off" aria-describedby="f-email-erro" required>
+                <div id="f-email-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="f-senha"><span id="rotulo-senha">Senha</span> <span aria-hidden="true" id="asterisco-senha">*</span></label>
+                <input type="password" class="form-control" id="f-senha" maxlength="128" autocomplete="new-password" aria-describedby="f-senha-dica f-senha-erro">
+                <div id="f-senha-dica" class="dica-campo">De 8 a 128 caracteres.</div>
+                <div id="f-senha-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="f-perfil">Perfil <span aria-hidden="true">*</span></label>
+                <select class="form-select" id="f-perfil" aria-describedby="f-perfil-dica f-perfil-erro" required>
+                  <option value="">Selecione um perfil</option>
+                </select>
+                <div id="f-perfil-dica" class="dica-campo"></div>
+                <div id="f-perfil-erro" class="invalid-feedback"></div>
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="f-org">Organização <span aria-hidden="true" id="asterisco-org">*</span></label>
+                <select class="form-select" id="f-org" aria-describedby="f-org-dica f-org-erro">
+                  <option value="">Sem organização</option>
+                </select>
+                <div id="f-org-dica" class="dica-campo"></div>
+                <div id="f-org-erro" class="invalid-feedback"></div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-leaf fw-semibold" data-bs-dismiss="modal" id="btn-cancelar">Cancelar</button>
+            <button type="submit" class="btn btn-success fw-semibold" id="btn-salvar">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmação de exclusão (UC02 FA3); foco inicial no Cancelar (ação segura) -->
+  <div class="modal fade" id="modal-excluir" tabindex="-1" aria-labelledby="modal-excluir-titulo" aria-describedby="modal-excluir-texto" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title h4" id="modal-excluir-titulo">Excluir usuário</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div id="msg-excluir" class="alert d-none"></div>
+          <p id="modal-excluir-texto" class="mb-0"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-leaf fw-semibold" data-bs-dismiss="modal" id="btn-nao-excluir">Cancelar</button>
+          <button type="button" class="btn btn-success fw-semibold" id="btn-confirmar-excluir">Sim, excluir</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">LEAF TI &middot; Informação Sustentável</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="../../js/api.js"></script>
+  <script src="../../js/layout.js"></script>
+  <script src="../../js/usuarios-comum.js"></script>
+  <script src="../../js/usuarios.js"></script>
+</body>
+</html>

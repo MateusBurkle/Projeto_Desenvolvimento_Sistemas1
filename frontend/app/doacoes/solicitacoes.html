@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<!-- Solicitações de doação (novo UC "Solicitar doação"; UC11 aprovar, UC19 ampliado). RN04, RN12, RN15; RNF01, RNF05, RNF06; DP-69 a DP-73, DP-77.
+     Cliente ONG (menu `minhas_doacoes`): vê as próprias solicitações com situação, motivo da recusa e botão Cancelar enquanto Pendente.
+     Administrador e Funcionário: veem todas e Aprovam (executa o UC11) ou Recusam (motivo obrigatório de 3 a 500 caracteres).
+     FE: solicitação já decidida (SOLICITACAO_NAO_PENDENTE), de outra ONG (404), sem lista (FA: estado vazio).
+     Desktop: 992, 1280 e 1920 px (DP-76). Os registros de doação do UC19 continuam em index.html. -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeafTi - Solicitações de doação</title>
+  <link rel="shortcut icon" href="../../images/logosemfundo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/identidade.css">
+  <link rel="stylesheet" href="../../css/app.css">
+  <link rel="stylesheet" href="../../css/usuarios.css">
+  <link rel="stylesheet" href="../../css/organizacoes.css">
+  <link rel="stylesheet" href="../../css/equipamentos.css">
+  <link rel="stylesheet" href="../../css/solicitacoes.css">
+  <link rel="stylesheet" href="../../css/vendas.css">
+  <link rel="stylesheet" href="../../css/marketplace.css">
+</head>
+<body class="app">
+  <a class="pular-conteudo" href="#conteudo-app">Pular para o conteúdo</a>
+  <header id="app-cabecalho"></header>
+
+  <main class="container py-4" id="conteudo-app" tabindex="-1" hidden>
+    <div id="area-sd">
+      <div id="mensagem" class="alert d-none" aria-live="polite"></div>
+
+      <section id="vista-lista" aria-labelledby="titulo-lista-sd">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h1 class="h2 m-0 vista-titulo" id="titulo-lista-sd">Solicitações de doação</h1>
+          <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-outline-leaf fw-semibold" href="index.html">Doações registradas</a>
+            <a class="btn btn-success fw-semibold" id="link-marketplace" href="../../hardware.html" hidden>Escolher produtos no marketplace</a>
+          </div>
+        </div>
+        <p class="dica-campo" id="dica-lista">Carregando...</p>
+
+        <section class="cartao-app mb-3" aria-labelledby="titulo-filtros">
+          <h2 class="h5" id="titulo-filtros">Filtrar solicitações</h2>
+          <form id="form-filtros" class="row g-3 align-items-end" novalidate>
+            <div class="col-md-6 col-xl-4">
+              <label class="form-label" for="filtro-situacao">Situação</label>
+              <select class="form-select" id="filtro-situacao">
+                <option value="">Todas</option><option>Pendente</option><option>Aprovada</option><option>Recusada</option><option>Cancelada</option>
+              </select>
+            </div>
+            <div class="col-md-6 col-xl-4 d-flex gap-2">
+              <button type="submit" class="btn btn-success fw-semibold flex-fill">Filtrar</button>
+              <button type="button" class="btn btn-outline-leaf fw-semibold flex-fill" id="btn-limpar">Limpar</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="cartao-app" aria-labelledby="titulo-tabela">
+          <h2 class="h5" id="titulo-tabela">Solicitações</h2>
+          <p id="estado-lista" class="mb-2" role="status">Carregando...</p>
+          <div id="vazio-lista" class="estado-vazio" hidden></div>
+          <div class="table-responsive">
+            <table class="table table-hover tabela-usuarios tabela-equip mb-3" id="tabela" hidden>
+              <caption class="visually-hidden">Solicitações de doação</caption>
+              <thead><tr id="cab-tabela"></tr></thead>
+              <tbody id="corpo-tabela"></tbody>
+            </table>
+          </div>
+          <nav class="d-flex flex-wrap align-items-center gap-2" aria-label="Paginação da lista" id="paginacao" hidden>
+            <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-anterior">Anterior</button>
+            <span id="texto-pagina" aria-live="polite"></span>
+            <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-proxima">Próxima</button>
+          </nav>
+        </section>
+      </section>
+
+      <section id="vista-detalhe" aria-labelledby="titulo-detalhe" hidden>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h1 class="h2 m-0 vista-titulo" id="titulo-detalhe">Solicitação de doação</h1>
+          <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-voltar">Voltar para a lista</button>
+        </div>
+        <div class="cartao-app">
+          <div id="corpo-detalhe"></div>
+          <div id="msg-detalhe" class="alert d-none mt-3" aria-live="polite"></div>
+          <div class="barra-acoes" id="acoes-detalhe"></div>
+
+          <!-- Recusa (Administrador/Funcionário): motivo obrigatório -->
+          <form class="painel-acao" id="painel-recusa" novalidate hidden aria-labelledby="titulo-recusa">
+            <h3 id="titulo-recusa">Recusar solicitação</h3>
+            <label class="form-label" for="motivo">Motivo da recusa <span aria-hidden="true">*</span></label>
+            <textarea class="form-control" id="motivo" rows="3" maxlength="500" aria-describedby="motivo-erro dica-motivo" required></textarea>
+            <div id="motivo-erro" class="invalid-feedback"></div>
+            <div id="dica-motivo" class="dica-campo">De 3 a 500 caracteres. A ONG verá este motivo.</div>
+            <div class="barra-acoes">
+              <button type="submit" class="btn btn-success fw-semibold" id="btn-confirmar-recusa">Confirmar recusa</button>
+              <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-desistir-recusa">Desistir</button>
+            </div>
+          </form>
+
+          <!-- Cancelamento (Cliente ONG): sem motivo -->
+          <div class="painel-acao" id="painel-cancelar" hidden>
+            <h3 id="titulo-cancelar" tabindex="-1">Cancelar solicitação</h3>
+            <p>Os produtos voltam ao marketplace. Esta ação não pode ser desfeita.</p>
+            <div class="barra-acoes">
+              <button type="button" class="btn btn-excluir fw-semibold" id="btn-confirmar-cancelar">Sim, cancelar solicitação</button>
+              <button type="button" class="btn btn-outline-leaf fw-semibold" id="btn-desistir-cancelar">Manter solicitação</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">LEAF TI &middot; Informação Sustentável</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="../../js/api.js"></script>
+  <script src="../../js/layout.js"></script>
+  <script src="../../js/usuarios-comum.js"></script>
+  <script src="../../js/equipamentos-comum.js"></script>
+  <script src="../../js/doacoes-solicitacoes.js"></script>
+</body>
+</html>

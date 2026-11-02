@@ -1,0 +1,401 @@
+openapi: 3.0.3
+info:
+  title: LEAF TI - Módulo 4 - Solicitações e doações
+  version: 1.0.0
+  description: |
+    UC09 Solicitar avaliação de equipamentos; UC10 Avaliar e definir destinação; UC11 Registrar destinação para doação;
+    UC19 Consultar doações e equipamentos destinados à ONG; UC20 Consultar solicitações e resultados da avaliação.
+    Requisitos: RF04, RF05, RF10, RF11, RF12, RF15, RF21; RN03, RN04, RN05, RN10, RN11, RN12, RN15, RN21; RNF04, RNF05.
+    Spec: especificacoes/modulo-4.md. Decisões: DP-40 a DP-44 (aprovadas em 2026-10-30).
+    Convenções: docs/CONVENCOES.md (prefixo /api/v1, Bearer, erro {codigo, mensagem, campos}, listagens {items,total,page,size}).
+
+    Regras comuns (todas no service):
+    - Solicitação (UC09, RN05, RN10, RN21): criada por usuário de perfil Empresa Doadora. A organização é a do token (nunca vem do corpo).
+      Organização precisa estar 'Ativa' (FE2 -> 422 ORGANIZACAO_INATIVA) e ter PARCEIRO com tipo_parceria 'Empresa Doadora' e
+      situacao_parceria 'Ativa' (FE3 -> 422 PARCERIA_INATIVA). Ordem: 400 -> 422 ORGANIZACAO_INATIVA -> 422 PARCERIA_INATIVA.
+      `itens`: 1 a 50; cada item `tipo` 1-100, `modelo` 1-100 (texto livre, sem espaços nas pontas), `quantidade` inteiro 1 a 9999 (FE1 -> 400).
+      Grava `data_solicitacao` = data de hoje (ISO) e `situacao` = 'Aguardando avaliação'. Depois de criada não é editável nem cancelável (DP-43).
+      O registro NÃO disponibiliza nada para venda ou doação (RN21).
+    - Situação da solicitação (DP-40): 'Aguardando avaliação' (criação) -> 'Em avaliação' (assim que existir ao menos um equipamento
+      vinculado a algum item) -> 'Avaliada' (todos os itens avaliados e destinados). É recalculada pelo service após cada gravação que
+      afete equipamentos vinculados (rotas deste módulo E mudanças de situação/condição pelas rotas do Módulo 3 e pela venda do Módulo 5):
+      o Módulo 3 chama `solicitacoes.service.recalcular_situacao(conexao, id_item_solicitacao)` na mesma transação.
+    - Avaliação por equipamento (DP-41, UC10 passos 3-5): avaliar um item = cadastrar equipamentos vinculados ao item (um por unidade),
+      reaproveitando as regras do Módulo 3 (equipamentos.service.criar com `id_item_solicitacao`). `modelo` vem do item; `origem` padrão
+      'Solicitação N' (N = id_solicitacao) se omitida. Máximo `quantidade` equipamentos por item (excesso -> 422 ITEM_COMPLETO).
+      Item 'avaliado' = possui `quantidade` equipamentos vinculados e todos com condicao diferente de 'A avaliar' e situacao em
+      {Disponível, Doado, Vendido, Destinado à reciclagem}. Condição/valor/recondicionamento (FA2) são alterados pelas rotas do Módulo 3
+      (PUT /equipamentos/{id}, PATCH /equipamentos/{id}/situacao); este módulo reflete o resultado.
+    - Destinação (DP-42, UC10 passo 4-6, UC11): venda -> situação 'Disponível'; doação -> 'Doado' (grava DOACAO na mesma transação:
+      ONG 'Cliente ONG' 'Ativa', data não futura e não anterior ao recebimento); reciclagem -> 'Destinado à reciclagem'. Reaproveita
+      `equipamentos.service.mudar_situacao` (DP-35/DP-36). Erros: 422 SEM_CONDICOES_DE_REUSO (UC10 FE1, UC11 FE2: só reciclagem),
+      422 TRANSICAO_INVALIDA, 422 EQUIPAMENTO_INATIVO, 422 DOACAO_INVALIDA (UC11 FE1). Itens de uma mesma solicitação podem ter
+      destinos diferentes (FA1).
+    - Solicitação 'Avaliada' (UC10 FE2): só é atingida quando todos os itens estão avaliados. Enquanto houver equipamento sem condição
+      avaliada ou sem destinação (ou unidade ainda não cadastrada), a situação permanece 'Em avaliação'; a resposta mostra `pendencias`.
+    - Acesso (RN04, RN05, RN15, RNF05): Empresa Doadora vê somente solicitações da própria organização; solicitação de outra
+      organização -> 404 NAO_ENCONTRADO (não vaza existência; "o sistema nega o acesso"). Cliente ONG vê somente doações da própria
+      organização, 404 para as de outra. Administrador e Funcionário veem tudo.
+    - Doação é criada somente pela destinação/situação 'Doado' (DP-36); este módulo expõe leitura (DP-44). Sem exclusão física.
+    - Ids acima de 2^63-1 em rota -> 404; em corpo/consulta -> 400 (RNF04).
+servers:
+  - url: /api/v1
+
+tags:
+  - { name: Solicitações }
+  - { name: Avaliação }
+  - { name: Doações }
+
+paths:
+  /solicitacoes:
+    get:
+      tags: [Solicitações]
+      operationId: listarSolicitacoes
+      summary: Listar solicitações (UC20 passo 1-3; UC10 passo 1)
+      description: |
+        Perfis: Empresa Doadora (somente as da própria organização; UC20), Administrador e Funcionário (todas; UC10).
+        Demais perfis -> 403. Filtros: `situacao`, `id_organizacao_doadora` (ignorado para Empresa Doadora), `data_de`, `data_ate`.
+        Ordenado por data_solicitacao decrescente, depois id decrescente. Cada item da página traz o resumo
+        (organização, situação, total de itens, total de unidades, unidades avaliadas).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: situacao, in: query, schema: { $ref: '#/components/schemas/SituacaoSolicitacao' } }
+        - { name: id_organizacao_doadora, in: query, schema: { type: integer } }
+        - { name: data_de, in: query, schema: { type: string, format: date } }
+        - { name: data_ate, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Página de solicitações (resumo).
+          content: { application/json: { schema: { $ref: '#/components/schemas/PaginaSolicitacoes' } } }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+    post:
+      tags: [Solicitações]
+      operationId: criarSolicitacao
+      summary: Registrar solicitação de avaliação (UC09 fluxo principal)
+      description: |
+        Perfil: Empresa Doadora (RN05, RN10). Organização vem do token. 422 ORGANIZACAO_INATIVA (FE2), 422 PARCERIA_INATIVA (FE3),
+        400 (FE1). Cria solicitação e itens na mesma transação; situação 'Aguardando avaliação'.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitacaoEntrada' }
+            example: { itens: [ { tipo: Notebook, modelo: Dell Latitude 5420, quantidade: 10 } ] }
+      responses:
+        '201':
+          description: Solicitação registrada.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Solicitacao' } } }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /solicitacoes/{id_solicitacao}:
+    parameters:
+      - { name: id_solicitacao, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Solicitações]
+      operationId: obterSolicitacao
+      summary: Consultar solicitação com itens, equipamentos avaliados e destinações (UC09 FA1, UC10 passo 2, UC20 passo 3-4)
+      description: |
+        Perfis: Empresa Doadora (só a própria; outra -> 404), Administrador, Funcionário. Para solicitação ainda não avaliada
+        devolve `equipamentos: []` e situação 'Aguardando avaliação', sem inventar condição nem destinação (UC20 FA1).
+        Cada equipamento traz `destinacao` derivada da situação: Disponível/Vendido -> 'Venda'; Doado -> 'Doação' (com ONG e data);
+        Destinado à reciclagem -> 'Reciclagem'; demais -> null (pendente). Empresa Doadora não recebe `valor` do equipamento.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Solicitação detalhada.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Solicitacao' } } }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+
+  /solicitacoes/{id_solicitacao}/itens/{id_item_solicitacao}/equipamentos:
+    parameters:
+      - { name: id_solicitacao, in: path, required: true, schema: { type: integer } }
+      - { name: id_item_solicitacao, in: path, required: true, schema: { type: integer } }
+    post:
+      tags: [Avaliação]
+      operationId: avaliarItemCadastrarEquipamento
+      summary: Registrar a condição avaliada de uma unidade do item (UC10 passo 3)
+      description: |
+        Perfis: Administrador e Funcionário (RN03). Cria um equipamento vinculado ao item (DP-41), situação inicial 'Recebido'
+        (ou 'Em avaliação'/'Em manutenção' se informada), reaproveitando as regras do Módulo 3 (identificação única, categoria ativa,
+        data_recebimento não futura, valor >= 0). Item inexistente ou de outra solicitação -> 404. Item já com `quantidade`
+        equipamentos -> 422 ITEM_COMPLETO. Atualiza a situação da solicitação para 'Em avaliação'.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AvaliacaoEntrada' } } }
+      responses:
+        '201':
+          description: Equipamento criado e vinculado.
+          content: { application/json: { schema: { $ref: '#/components/schemas/EquipamentoVinculado' } } }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '409': { $ref: '#/components/responses/IdentificacaoDuplicada' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /solicitacoes/{id_solicitacao}/equipamentos/{id_equipamento}/destinacao:
+    parameters:
+      - { name: id_solicitacao, in: path, required: true, schema: { type: integer } }
+      - { name: id_equipamento, in: path, required: true, schema: { type: integer } }
+    put:
+      tags: [Avaliação]
+      operationId: definirDestinacao
+      summary: Definir a destinação de um equipamento da solicitação (UC10 passo 4-7; UC11 quando 'Doação')
+      description: |
+        Perfis: Administrador e Funcionário. Equipamento precisa estar vinculado a um item da solicitação (senão 404).
+        `destinacao` = Venda | Doação | Reciclagem. Doação exige `id_organizacao_ong` e `data_doacao` (400 se ausentes; UC11 FE1);
+        Venda e Reciclagem rejeitam (400) esses campos se informados. Idempotente se a situação já corresponde.
+        DP-54: se a condição do equipamento é 'A avaliar', 422 CONDICAO_NAO_AVALIADA (campos {condicao}), sem gravar, antes das demais
+        regras de destinação (inclusive da idempotência); Reciclagem para as demais condições continua permitida.
+        Recalcula a situação da solicitação na mesma transação; se todos os itens estiverem avaliados, vira 'Avaliada' (UC10 passo 7).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DestinacaoEntrada' } } }
+      responses:
+        '200':
+          description: Solicitação atualizada (corpo igual ao de GET /solicitacoes/{id}).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Solicitacao' } } }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /doacoes/ongs-elegiveis:
+    get:
+      tags: [Doações]
+      operationId: listarOngsElegiveis
+      summary: ONGs ativas elegíveis para receber doação (UC11 passo 2)
+      description: 'Perfis: Administrador e Funcionário. Organizações tipo Cliente ONG com situacao Ativa, ordenadas por nome. Sem paginação (máx. 200).'
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista de ONGs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/OngElegivel' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+
+  /doacoes:
+    get:
+      tags: [Doações]
+      operationId: listarDoacoes
+      summary: Listar doações e equipamentos destinados (UC19 passo 2-3)
+      description: |
+        Perfis: Cliente ONG (somente DOACAO com id_organizacao_ong = a própria; RN04, RN15), Administrador e Funcionário (todas, filtro
+        `id_organizacao_ong`). Demais perfis -> 403. Filtros `data_de`, `data_ate`. Ordenado por data_doacao decrescente.
+        Lista vazia é 200 com items [] (UC19 FA1: a tela informa que ainda não há doações).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: id_organizacao_ong, in: query, schema: { type: integer } }
+        - { name: data_de, in: query, schema: { type: string, format: date } }
+        - { name: data_ate, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Página de doações.
+          content: { application/json: { schema: { $ref: '#/components/schemas/PaginaDoacoes' } } }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+
+  /doacoes/{id_doacao}:
+    parameters:
+      - { name: id_doacao, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Doações]
+      operationId: obterDoacao
+      summary: Consultar detalhes da doação (UC19 passo 4)
+      description: 'Perfis: Cliente ONG (só a própria; de outra ONG -> 404, UC19 FE1), Administrador e Funcionário.'
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Doação detalhada.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Doacao' } } }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  responses:
+    NaoAutenticado:
+      description: Token ausente, inválido ou expirado (NAO_AUTENTICADO).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    SemPermissao:
+      description: Perfil sem autorização (SEM_PERMISSAO) ou conta inativa (CONTA_INATIVA).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    DadosInvalidos:
+      description: Campos obrigatórios ausentes ou inválidos (DADOS_INVALIDOS; UC09 FE1).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example: { codigo: DADOS_INVALIDOS, mensagem: 'Dados inválidos. Corrija os campos indicados.', campos: { quantidade: 'deve ser de 1 a 9999' } }
+    NaoEncontrado:
+      description: Registro inexistente ou de outra organização (NAO_ENCONTRADO).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    IdentificacaoDuplicada:
+      description: Identificação já usada por outro equipamento (IDENTIFICACAO_DUPLICADA).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    RegraViolada:
+      description: |
+        Regra violada: ORGANIZACAO_INATIVA, PARCERIA_INATIVA (UC09 FE2/FE3), ITEM_COMPLETO, CATEGORIA_INVALIDA,
+        SEM_CONDICOES_DE_REUSO, TRANSICAO_INVALIDA, EQUIPAMENTO_INATIVO, EQUIPAMENTO_FINALIZADO, DOACAO_INVALIDA (UC10, UC11),
+        CONDICAO_NAO_AVALIADA (DP-54, UC10 passo 3-4: destinação com condição 'A avaliar').
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example: { codigo: PARCERIA_INATIVA, mensagem: 'A Empresa Doadora precisa de vínculo de parceria ativo para solicitar avaliação.', campos: {} }
+
+  schemas:
+    Erro:
+      type: object
+      required: [codigo, mensagem, campos]
+      properties:
+        codigo: { type: string }
+        mensagem: { type: string }
+        campos: { type: object, additionalProperties: { type: string } }
+    SituacaoSolicitacao:
+      type: string
+      enum: [Aguardando avaliação, Em avaliação, Avaliada]
+    Destinacao:
+      type: string
+      enum: [Venda, Doação, Reciclagem]
+    ItemEntrada:
+      type: object
+      required: [tipo, modelo, quantidade]
+      properties:
+        tipo: { type: string, minLength: 1, maxLength: 100 }
+        modelo: { type: string, minLength: 1, maxLength: 100 }
+        quantidade: { type: integer, minimum: 1, maximum: 9999 }
+    SolicitacaoEntrada:
+      type: object
+      required: [itens]
+      properties:
+        itens: { type: array, minItems: 1, maxItems: 50, items: { $ref: '#/components/schemas/ItemEntrada' } }
+    AvaliacaoEntrada:
+      type: object
+      required: [identificacao, id_categoria, condicao, data_recebimento]
+      properties:
+        identificacao: { type: string, minLength: 1, maxLength: 50 }
+        id_categoria: { type: integer }
+        condicao: { type: string, enum: [A avaliar, Bom, Regular, Necessita reparo, Sem condições de reuso] }
+        origem: { type: string, minLength: 1, maxLength: 100, description: "Padrão 'Solicitação N'." }
+        data_recebimento: { type: string, format: date }
+        valor: { type: number, minimum: 0, maximum: 9999999.99, nullable: true }
+        situacao: { type: string, enum: [Recebido, Em avaliação, Em manutenção], description: Padrão Recebido. }
+    DestinacaoEntrada:
+      type: object
+      required: [destinacao]
+      properties:
+        destinacao: { $ref: '#/components/schemas/Destinacao' }
+        id_organizacao_ong: { type: integer, description: Obrigatório se Doação. }
+        data_doacao: { type: string, format: date, description: Obrigatório se Doação. }
+    EquipamentoVinculado:
+      type: object
+      properties:
+        id_equipamento: { type: integer }
+        identificacao: { type: string }
+        id_categoria: { type: integer }
+        categoria_nome: { type: string }
+        modelo: { type: string }
+        condicao: { type: string }
+        situacao: { type: string }
+        ativo: { type: boolean }
+        valor: { type: number, nullable: true, description: Omitido para Empresa Doadora. }
+        data_recebimento: { type: string, format: date }
+        destinacao: { allOf: [ { $ref: '#/components/schemas/Destinacao' } ], nullable: true }
+        id_organizacao_ong: { type: integer, nullable: true }
+        nome_ong: { type: string, nullable: true }
+        data_doacao: { type: string, format: date, nullable: true }
+    ItemSolicitacao:
+      type: object
+      properties:
+        id_item_solicitacao: { type: integer }
+        tipo: { type: string }
+        modelo: { type: string }
+        quantidade: { type: integer }
+        quantidade_cadastrada: { type: integer, description: Equipamentos vinculados ao item. }
+        quantidade_avaliada: { type: integer, description: Vinculados com condição avaliada e destinação registrada. }
+        avaliado: { type: boolean }
+        equipamentos: { type: array, items: { $ref: '#/components/schemas/EquipamentoVinculado' } }
+    Solicitacao:
+      type: object
+      properties:
+        id_solicitacao: { type: integer }
+        id_organizacao_doadora: { type: integer }
+        nome_organizacao: { type: string }
+        data_solicitacao: { type: string, format: date }
+        situacao: { $ref: '#/components/schemas/SituacaoSolicitacao' }
+        pendencias: { type: array, items: { type: string }, description: 'Textos curtos do que falta para concluir (UC10 FE2).' }
+        itens: { type: array, items: { $ref: '#/components/schemas/ItemSolicitacao' } }
+    SolicitacaoResumo:
+      type: object
+      properties:
+        id_solicitacao: { type: integer }
+        id_organizacao_doadora: { type: integer }
+        nome_organizacao: { type: string }
+        data_solicitacao: { type: string, format: date }
+        situacao: { $ref: '#/components/schemas/SituacaoSolicitacao' }
+        total_itens: { type: integer }
+        total_unidades: { type: integer }
+        unidades_avaliadas: { type: integer }
+    PaginaSolicitacoes:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/SolicitacaoResumo' } }
+        total: { type: integer }
+        page: { type: integer }
+        size: { type: integer }
+    OngElegivel:
+      type: object
+      properties:
+        id_organizacao: { type: integer }
+        nome_razao_social: { type: string }
+    Doacao:
+      type: object
+      properties:
+        id_doacao: { type: integer }
+        id_equipamento: { type: integer }
+        identificacao: { type: string }
+        modelo: { type: string }
+        categoria_nome: { type: string }
+        condicao: { type: string }
+        situacao: { type: string }
+        id_organizacao_ong: { type: integer }
+        nome_ong: { type: string }
+        data_doacao: { type: string, format: date }
+        id_solicitacao: { type: integer, nullable: true }
+    PaginaDoacoes:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Doacao' } }
+        total: { type: integer }
+        page: { type: integer }
+        size: { type: integer }
+
+# Esclarecimentos do coordenador (sem mudar regra; 2026-10-30):
+# 1) Chave de erro 400 aninhado: o handler global usa só o último trecho do caminho (ex.: 'quantidade'), igual aos demais módulos.
+# 2) Destinação idempotente: Venda vale se o equipamento está Disponível ou Vendido; Doação se Doado (200 sem alterar, mesmo com ONG/data
+#    diferentes); Reciclagem se Destinado à reciclagem.
+# 3) ITEM_COMPLETO vale só na rota deste módulo (ver DP-52 sobre o Módulo 3).
+# 4) ORGANIZACAO_INATIVA (UC09 FE2): organização inativa já é barrada antes com 403 CONTA_INATIVA; o 422 permanece no service como defesa.
+# 5) Parceria ativa = situacao_parceria 'Ativa'. 6) data_de > data_ate devolve lista vazia, sem erro.

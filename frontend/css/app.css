@@ -1,0 +1,42 @@
+/* Layout base das telas logadas (frontend/app/). Usa variáveis de identidade.css. */
+body.app { background: var(--leaf-green-tint); min-height: 100vh; display: flex; flex-direction: column; }
+.app main { flex: 1; }
+.app .navbar-brand { font-family: var(--font-titulo); color: var(--leaf-white); font-size: 1.25rem; min-height: 44px; display: flex; align-items: center; }
+.app .navbar .nav-link { color: var(--leaf-white); padding: .75rem .5rem; min-height: 44px; }
+.app .navbar a, .app .navbar-brand { text-decoration: none; }
+.app .navbar .nav-link:hover, .app .navbar .nav-link.active { color: var(--leaf-white); font-weight: 700; text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; }
+.app .navbar .item-em-breve { color: var(--leaf-green-tint-2); cursor: default; }
+.app .usuario-info { color: var(--leaf-white); line-height: 1.2; font-size: 1rem; }
+.app .navbar-toggler { min-width: 44px; min-height: 44px; }
+.app .navbar .badge { font-size: 1rem; }
+.app .navbar .dropdown-menu { background: var(--leaf-green-dark); border-color: var(--leaf-green); }
+.app .navbar .dropdown-item { color: var(--leaf-white); min-height: 44px; display: flex; align-items: center; white-space: normal; }
+.app .navbar .dropdown-item:hover, .app .navbar .dropdown-item:focus, .app .navbar .dropdown-item.active { background: var(--leaf-green-dark-hover); color: var(--leaf-white); font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
+.app .navbar .dropdown-item.item-em-breve { color: var(--leaf-green-tint-2); }
+/* Sem rolagem horizontal em nenhuma largura */
+.app header, .app .navbar { max-width: 100%; }
+/* Foco visível (especificidade acima do Bootstrap) */
+.app .navbar .nav-link:focus-visible, .app .navbar .dropdown-item:focus-visible,
+.app .navbar .navbar-toggler:focus-visible, .app .navbar .navbar-brand:focus-visible,
+.app .navbar .btn-sair:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: none; }
+.app .navbar .btn-sair { background: var(--leaf-white); color: var(--leaf-green-dark); border-color: var(--leaf-white); }
+.app .navbar .btn-sair:hover { background: var(--leaf-green-tint-2); color: var(--leaf-green-dark); }
+.app .navbar .badge-acento { color: var(--leaf-green-dark); }
+.app .navbar .bloco-usuario, .app .navbar .usuario-info { min-width: 0; }
+@media (min-width: 1200px) {
+  .app .navbar .usuario-info { max-width: 11rem; }
+  .app .navbar .navbar-collapse { min-width: 0; }
+  .app .navbar .btn-sair { flex-shrink: 0; }
+}
+@media (min-width: 1200px) { .app .navbar .nav-link { white-space: nowrap; padding: .75rem .6rem; } }
+.app .btn { min-height: 44px; }
+
+.cartao-app {
+  background: var(--leaf-white);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .08);
+  padding: 1.25rem;
+}
+@media (min-width: 768px) { .cartao-app { padding: 2rem; } }
+
+.app footer { background: var(--leaf-green-dark); color: var(--leaf-white); padding: 1rem 0; font-size: 1rem; }

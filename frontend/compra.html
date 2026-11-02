@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeafTi - Detalhe do produto</title>
+  <link rel="shortcut icon" href="images/logosemfundo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/identidade.css">
+  <link rel="stylesheet" href="css/marketplace.css">
+</head>
+<body class="mkt">
+  <a class="pular-conteudo" href="#conteudo-mkt">Pular para o conteúdo</a>
+
+  <header class="sticky-top border-bottom">
+    <nav class="navbar navbar-expand-lg container" aria-label="Menu principal">
+      <a class="navbar-brand" href="index.html"><img src="images/logosemfundo.png" alt="Logo da LEAF TI" class="logo-cabecalho"></a>
+      <ul class="navbar-nav me-auto flex-row gap-3">
+        <li class="nav-item"><a class="nav-link" href="index.html">Início</a></li>
+        <li class="nav-item"><a class="nav-link active" href="hardware.html" aria-current="page">Marketplace</a></li>
+        <li class="nav-item"><a class="nav-link" href="quemsomos.html">Quem somos</a></li>
+      </ul>
+      <div id="area-usuario"><!-- Entrar / nome / Sair: js/publico.js --></div>
+    </nav>
+  </header>
+
+  <main class="container my-4" id="conteudo-mkt" tabindex="-1">
+    <p><a href="hardware.html" id="link-voltar">&larr; Voltar ao marketplace</a></p>
+    <div id="mensagem" class="alert d-none" aria-live="polite"></div>
+    <p id="estado" role="status">Carregando...</p>
+
+    <article class="cartao-mkt detalhe-mkt" id="produto" aria-labelledby="titulo-produto" hidden>
+      <div class="row g-4 align-items-center">
+        <div class="col-lg-4 text-center" id="d-imagem"><span aria-hidden="true"><i class="fas fa-microchip icone-grande"></i></span></div>
+        <div class="col-lg-8">
+          <h1 class="h2" id="titulo-produto" tabindex="-1"></h1>
+          <dl>
+            <dt>Categoria</dt><dd id="d-categoria"></dd>
+            <dt>Condição</dt><dd id="d-condicao"></dd>
+            <dt>Valor</dt><dd id="d-valor"></dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- Área de ação: muda conforme o perfil (js/produto.js). A segurança real é do back-end. -->
+      <section class="bloco-acao" id="bloco-acao" aria-labelledby="titulo-acao">
+        <h2 class="h5" id="titulo-acao">O que você pode fazer</h2>
+        <div id="msg-acao" class="alert d-none" aria-live="polite"></div>
+        <div id="conteudo-acao"></div>
+      </section>
+    </article>
+  </main>
+
+  <footer class="mkt-rodape"><div class="container">LEAF TI &middot; Informação Sustentável</div></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/publico.js"></script>
+  <script src="js/produto.js"></script>
+</body>
+</html>

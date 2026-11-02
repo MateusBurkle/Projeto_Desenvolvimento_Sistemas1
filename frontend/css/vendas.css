@@ -1,0 +1,33 @@
+/* Telas do Módulo 5 (loja e vendas): app/catalogo/, app/compras/, app/vendas/, app/notas-fiscais/.
+   UC12 a UC18, UC21; RNF01, RNF06. Complementa usuarios.css, organizacoes.css, equipamentos.css e solicitacoes.css. */
+
+/* Catálogo em cartões: 1 coluna (360 px), 2 (768 px), 3 (1200 px) */
+.grade-catalogo { display: grid; grid-template-columns: 1fr; gap: 1rem; list-style: none; padding: 0; margin: 0 0 1rem; }
+@media (min-width: 768px) { .grade-catalogo { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1200px) { .grade-catalogo { grid-template-columns: repeat(3, 1fr); } }
+.cartao-equip { display: flex; flex-direction: column; gap: .25rem; height: 100%; border: 1px solid var(--leaf-green-tint-2); border-radius: 10px; background: var(--leaf-white); padding: 1rem; min-width: 0; }
+.cartao-equip.selecionado { border: 2px solid var(--leaf-green-dark); background: var(--leaf-green-tint); }
+.cartao-equip h3 { font-size: 1.25rem; margin: 0; overflow-wrap: anywhere; }
+.cartao-equip .valor { font-size: 1.25rem; font-weight: 600; color: var(--leaf-green-dark); }
+.cartao-equip .grupo-acoes { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: auto; padding-top: .5rem; }
+.cartao-equip .grupo-acoes .btn { flex: 1 1 8rem; }
+
+/* Barra do pedido em montagem: fixa no rodapé da área visível, sem cobrir o conteúdo */
+.barra-pedido { position: sticky; bottom: 0; z-index: 5; background: var(--leaf-green-dark); color: var(--leaf-white); border-radius: 10px 10px 0 0;
+  padding: .75rem 1rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; }
+.barra-pedido .btn { background: var(--leaf-white); color: var(--leaf-green-dark); border-color: var(--leaf-white); font-weight: 600; }
+.barra-pedido .btn:hover { background: var(--leaf-green-tint-2); }
+.barra-pedido .btn:focus-visible { outline: 3px solid var(--leaf-white) !important; outline-offset: 2px; }
+
+/* Item apontado como indisponível (UC13 FE1): borda tracejada + texto, nunca só cor */
+.item-indisponivel { border: 2px dashed var(--leaf-erro) !important; background: var(--leaf-erro-tint); }
+.item-indisponivel .aviso-item { color: var(--leaf-erro); font-weight: 600; }
+tr.item-indisponivel td { background: var(--leaf-erro-tint); }
+
+/* Painéis de ação do pedido (confirmar, pagamento, cancelar) */
+.painel-acao { border: 1px solid var(--leaf-green-tint-2); border-radius: 10px; background: var(--leaf-green-tint); padding: 1rem; margin-top: 1rem; }
+.painel-acao h3 { font-size: 1.25rem; }
+.barra-acoes { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+.barra-acoes .btn { flex: 1 1 10rem; }
+@media (min-width: 768px) { .barra-acoes .btn { flex: 0 0 auto; } }
+.tabela-vendas td[data-rotulo="Valor"], .tabela-vendas td[data-rotulo="Data"], .tabela-vendas td[data-rotulo="Pedido"] { white-space: nowrap; }

@@ -1,0 +1,477 @@
+openapi: 3.0.3
+info:
+  title: LEAF TI - Módulo 5 - Loja e vendas
+  version: 1.0.0
+  description: |
+    UC12 Consultar catálogo; UC13 Realizar pedido de compra; UC14 Registrar e confirmar venda; UC15 Atualizar disponibilidade do estoque;
+    UC16 Emitir nota fiscal simulada; UC17 Consultar e baixar nota fiscal simulada; UC18 Consultar histórico de compras;
+    UC21 Consultar histórico geral de vendas.
+    Requisitos: RF02, RF03, RF04, RF13, RF14, RF15, RF19, RF20; RN02, RN03, RN04, RN13, RN14, RN15, RN19, RN20; RNF03, RNF04, RNF05.
+    Spec: especificacoes/modulo-5.md. Decisões: DP-45 a DP-51 e DP-52 (aprovadas em 2026-10-31).
+    Convenções: docs/CONVENCOES.md (prefixo /api/v1, Bearer, erro {codigo, mensagem, campos}, listagens {items,total,page,size}).
+
+    Regras comuns (todas no service):
+    - Pedido = VENDA com situacao 'Pendente' (UC13). Cada ITEM_VENDA é uma unidade (equipamento); "quantidade" = número de itens.
+      Não há estoque por modelo (DP-45).
+    - Catálogo (UC12, RN13, DP-50): equipamento `ativo`, situacao 'Disponível', condicao diferente de 'A avaliar' e 'Sem condições de reuso',
+      valor > 0 e SEM linha em ITEM_VENDA (nem em pedido Pendente). Perfil: Cliente Empresa. Outros perfis -> 403 (UC12 FE2).
+    - Criar pedido (UC13, RN13, DP-45/48): organização do token (Cliente Empresa) deve estar 'Ativa' (FE2 -> 403 CONTA_INATIVA pelo token;
+      422 CLIENTE_INATIVO no service como defesa). `ids_equipamento`: 1 a 50, sem repetição (400). Cada equipamento é revalidado
+      pelas regras do catálogo; os afetados vão em `campos` ({"ids_equipamento": "indisponíveis: 12, 15"}) -> 422 ITEM_INDISPONIVEL (FE1).
+      Grava VENDA situacao 'Pendente', `data_venda` = hoje, `forma_pagamento` = a informada (opcional, DP-79: Pix, Boleto, Transferência bancária, Cartão de crédito; inválida -> 400) ou 'A definir' se omitida (DP-46) e ITEM_VENDA com `valor` =
+      EQUIPAMENTO.valor congelado (DP-48). O equipamento continua 'Disponível' (reservado pela linha em ITEM_VENDA).
+    - Alterar pedido (UC13 FA1, UC14 FA1, DP-47): enquanto 'Pendente'. PUT /vendas/{id}/itens substitui o conjunto de equipamentos
+      (cliente da própria organização, Administrador, Funcionário); mínimo 1 item; itens novos seguem as regras do catálogo, itens já no
+      pedido continuam com o valor congelado. PATCH /vendas/{id} ajusta `forma_pagamento` (somente Administrador/Funcionário).
+      Pedido 'Confirmada' ou 'Cancelada' -> 422 VENDA_NAO_PENDENTE (somente leitura).
+    - Cancelar (UC13 FA1, UC14 FA2, DP-45/47): só 'Pendente'; situacao 'Cancelada'; as linhas de ITEM_VENDA são apagadas (liberam os
+      equipamentos; única exclusão física do módulo). Não gera nota nem venda confirmada. Cliente Empresa cancela os da própria organização;
+      Administrador e Funcionário cancelam qualquer pedido pendente.
+    - Confirmar (UC14, UC15, RN13, RN14, DP-46/48): Administrador e Funcionário. Corpo: `data_venda` (ISO, não futura, não anterior à data do
+      pedido) e `forma_pagamento` (Pix, Boleto, Transferência bancária, Cartão de crédito). Revalida: cliente 'Ativa' (422 CLIENTE_INATIVO),
+      e cada equipamento ativo, 'Disponível', condição apta (422 ITEM_INDISPONIVEL com os ids). Em uma transação: venda 'Confirmada' +
+      cada equipamento 'Vendido' (via equipamentos.service.mudar_situacao(permitir_vendido=True, commit=False)). Qualquer falha ->
+      rollback total, a venda continua 'Pendente' (UC15 FE1) -> 500 evitado, erro 422 FALHA_ESTOQUE. Dados incompletos -> 400 (FE1).
+    - Nota fiscal simulada (UC16, RN19, DP-49): só o Administrador emite, só para venda 'Confirmada' (422 VENDA_NAO_CONFIRMADA, FE1).
+      `numero` = 'NFS-AAAA-NNNNNN' (ano da emissão, sequência de 6 dígitos, única); `data_emissao` = hoje. Já existindo nota, devolve a existente
+      com 200 (FA1, sem duplicar). Venda sem itens ou com soma de valores inconsistente -> 422 VENDA_INCONSISTENTE (FE2).
+      Consulta/download (UC17, RN20): Administrador (todas) e Cliente Empresa (só da própria organização; outra -> 404, FE1). Funcionário -> 403.
+      Download: HTML imprimível gerado pela API, com a marca 'SIMULADA – sem valor fiscal' (Content-Disposition attachment).
+    - Históricos (UC18, UC21, RN15, DP-51): GET /vendas devolve todas as situações. Administrador/Funcionário veem todas e filtram por período
+      (`data_de`/`data_ate` sobre data_venda), `id_organizacao_cliente` e `situacao` (UC21). Cliente Empresa vê apenas as da própria organização
+      (filtros de organização ignorados; UC18). Venda de outra organização -> 404. Cliente ONG e Empresa Doadora -> 403 (RN15).
+    - `valor_total` = soma dos valores dos itens; `quantidade` = número de itens.
+    - Sem outros DELETE. Ids acima de 2^63-1 em rota -> 404; em corpo/consulta -> 400 (RNF04).
+servers:
+  - url: /api/v1
+
+tags:
+  - { name: Catálogo }
+  - { name: Vendas }
+  - { name: Notas fiscais }
+
+paths:
+  /catalogo:
+    get:
+      tags: [Catálogo]
+      operationId: listarCatalogo
+      summary: Catálogo de equipamentos disponíveis para compra (UC12 passos 1-2)
+      description: |
+        Perfil: Cliente Empresa. Filtros `id_categoria`, `q` (modelo, sem diferenciar caixa). Ordenado por modelo, depois id.
+        Lista vazia é 200 com items [] (UC12 FE1: a tela informa que não há equipamentos disponíveis).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: id_categoria, in: query, schema: { type: integer } }
+        - { name: q, in: query, schema: { type: string, maxLength: 150 } }
+      responses:
+        '200':
+          description: Página do catálogo.
+          content: { application/json: { schema: { $ref: '#/components/schemas/PaginaCatalogo' } } }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+
+  /catalogo/{id_equipamento}:
+    parameters:
+      - { name: id_equipamento, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Catálogo]
+      operationId: obterItemCatalogo
+      summary: Detalhe do item do catálogo (UC12 passos 3-4, FA1)
+      description: 'Perfil: Cliente Empresa. Equipamento que não atende às regras do catálogo -> 404 NAO_ENCONTRADO.'
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Item do catálogo.
+          content: { application/json: { schema: { $ref: '#/components/schemas/ItemCatalogo' } } }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+
+  /vendas:
+    get:
+      tags: [Vendas]
+      operationId: listarVendas
+      summary: Histórico de vendas e pedidos (UC21 geral; UC18 próprias)
+      description: |
+        Perfis: Administrador, Funcionário (todas; UC21) e Cliente Empresa (somente da própria organização; UC18). Demais -> 403.
+        Filtros: `situacao`, `id_organizacao_cliente` (ignorado para Cliente Empresa), `data_de`, `data_ate`. Ordenado por data_venda
+        decrescente, depois id decrescente. `data_de` > `data_ate` -> lista vazia.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: situacao, in: query, schema: { $ref: '#/components/schemas/SituacaoVenda' } }
+        - { name: id_organizacao_cliente, in: query, schema: { type: integer } }
+        - { name: data_de, in: query, schema: { type: string, format: date } }
+        - { name: data_ate, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Página de vendas (resumo).
+          content: { application/json: { schema: { $ref: '#/components/schemas/PaginaVendas' } } }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+    post:
+      tags: [Vendas]
+      operationId: criarPedido
+      summary: Realizar pedido de compra (UC13 fluxo principal)
+      description: |
+        Perfil: Cliente Empresa (RN13: Cliente ONG não compra). Organização do token. Cria VENDA 'Pendente' e ITEM_VENDA na mesma transação.
+        400 (lista vazia, repetida ou grande); 422 ITEM_INDISPONIVEL (FE1); 422 CLIENTE_INATIVO (FE2).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PedidoEntrada' }
+            example: { ids_equipamento: [12, 15] }
+      responses:
+        '201':
+          description: Pedido registrado, aguardando confirmação da LEAF TI.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Venda' } } }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /vendas/{id_venda}:
+    parameters:
+      - { name: id_venda, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Vendas]
+      operationId: obterVenda
+      summary: Detalhe do pedido ou venda (UC14 passo 2; UC18 passo 4; UC21 passo 5)
+      description: 'Perfis: Administrador, Funcionário e Cliente Empresa (só da própria organização; outra -> 404). Traz itens, valor_total e nota (se houver).'
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Venda detalhada.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Venda' } } }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+    patch:
+      tags: [Vendas]
+      operationId: ajustarPedido
+      summary: Ajustar forma de pagamento do pedido pendente (UC14 FA1)
+      description: 'Perfis: Administrador e Funcionário. Só Pendente (422 VENDA_NAO_PENDENTE). Ordem: 400 -> 404 -> 422.'
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AjusteEntrada' } } }
+      responses:
+        '200':
+          description: Pedido atualizado.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Venda' } } }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /vendas/{id_venda}/itens:
+    parameters:
+      - { name: id_venda, in: path, required: true, schema: { type: integer } }
+    put:
+      tags: [Vendas]
+      operationId: substituirItensPedido
+      summary: Alterar os equipamentos do pedido pendente (UC13 FA1; UC14 FA1)
+      description: |
+        Perfis: Cliente Empresa (da própria organização; outra -> 404), Administrador e Funcionário. Substitui o conjunto de equipamentos.
+        Só Pendente (422 VENDA_NAO_PENDENTE). Mínimo 1 item. Itens retirados são liberados; itens novos seguem as regras do catálogo
+        (422 ITEM_INDISPONIVEL). Itens já presentes mantêm o valor congelado.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PedidoEntrada' } } }
+      responses:
+        '200':
+          description: Pedido atualizado.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Venda' } } }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /vendas/{id_venda}/cancelar:
+    parameters:
+      - { name: id_venda, in: path, required: true, schema: { type: integer } }
+    post:
+      tags: [Vendas]
+      operationId: cancelarPedido
+      summary: Cancelar pedido pendente (UC13 FA1; UC14 FA2)
+      description: |
+        Perfis: Cliente Empresa (da própria organização), Administrador e Funcionário. Só Pendente (422 VENDA_NAO_PENDENTE).
+        Situação 'Cancelada' e remoção das linhas de ITEM_VENDA (libera os equipamentos). Idempotente se já 'Cancelada' (200).
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Pedido cancelado.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Venda' } } }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /vendas/{id_venda}/confirmar:
+    parameters:
+      - { name: id_venda, in: path, required: true, schema: { type: integer } }
+    post:
+      tags: [Vendas]
+      operationId: confirmarVenda
+      summary: Registrar e confirmar a venda; atualiza o estoque (UC14 fluxo principal; UC15)
+      description: |
+        Perfis: Administrador e Funcionário (RN03). Ordem: 400 (UC14 FE1 dados incompletos) -> 404 -> 422 VENDA_NAO_PENDENTE ->
+        422 CLIENTE_INATIVO -> 422 ITEM_INDISPONIVEL -> 422 FALHA_ESTOQUE. Venda 'Confirmada' e equipamentos 'Vendido' na mesma
+        transação (RN14, UC15); falha = rollback total. Idempotente se já 'Confirmada' com os mesmos dados -> 200.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ConfirmacaoEntrada' } } }
+      responses:
+        '200':
+          description: Venda confirmada.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Venda' } } }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /vendas/{id_venda}/nota-fiscal:
+    parameters:
+      - { name: id_venda, in: path, required: true, schema: { type: integer } }
+    post:
+      tags: [Notas fiscais]
+      operationId: emitirNotaFiscal
+      summary: Emitir nota fiscal simulada (UC16)
+      description: |
+        Perfil: Administrador (RN19). 201 ao emitir; 200 com a nota existente se já houver (FA1). 422 VENDA_NAO_CONFIRMADA (FE1),
+        422 VENDA_INCONSISTENTE (FE2). Funcionário e demais -> 403.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '201':
+          description: Nota emitida.
+          content: { application/json: { schema: { $ref: '#/components/schemas/NotaFiscal' } } }
+        '200':
+          description: Nota já existente para a venda.
+          content: { application/json: { schema: { $ref: '#/components/schemas/NotaFiscal' } } }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '422': { $ref: '#/components/responses/RegraViolada' }
+
+  /notas-fiscais:
+    get:
+      tags: [Notas fiscais]
+      operationId: listarNotasFiscais
+      summary: Listar notas fiscais simuladas (UC17 passo 1-2)
+      description: |
+        Perfis: Administrador (todas) e Cliente Empresa (somente da própria organização). Funcionário e demais -> 403.
+        Filtros `data_de`, `data_ate` (data_emissao) e `id_organizacao_cliente` (ignorado para Cliente Empresa). Ordenado por data_emissao decrescente.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: id_organizacao_cliente, in: query, schema: { type: integer } }
+        - { name: data_de, in: query, schema: { type: string, format: date } }
+        - { name: data_ate, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Página de notas.
+          content: { application/json: { schema: { $ref: '#/components/schemas/PaginaNotas' } } }
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+
+  /notas-fiscais/{id_nota}:
+    parameters:
+      - { name: id_nota, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Notas fiscais]
+      operationId: obterNotaFiscal
+      summary: Consultar nota fiscal simulada (UC17 passos 3-4, FA1)
+      description: 'Perfis: Administrador e Cliente Empresa da venda. Nota inexistente ou de outra organização -> 404 (FE1), sem revelar dados.'
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Nota detalhada (venda, cliente, itens e valores).
+          content: { application/json: { schema: { $ref: '#/components/schemas/NotaFiscal' } } }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+
+  /notas-fiscais/{id_nota}/download:
+    parameters:
+      - { name: id_nota, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Notas fiscais]
+      operationId: baixarNotaFiscal
+      summary: Baixar nota fiscal simulada (UC17 passo 5)
+      description: 'Mesmas permissões e 404 da consulta. Resposta text/html (UTF-8), Content-Disposition attachment; filename="NFS-AAAA-NNNNNN.html", com a marca SIMULADA – sem valor fiscal.'
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Arquivo HTML da nota.
+          content: { text/html: { schema: { type: string } } }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  responses:
+    NaoAutenticado:
+      description: Token ausente, inválido ou expirado (NAO_AUTENTICADO).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    SemPermissao:
+      description: Perfil sem autorização (SEM_PERMISSAO) ou conta inativa (CONTA_INATIVA).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    DadosInvalidos:
+      description: Campos obrigatórios ausentes ou inválidos (DADOS_INVALIDOS; UC14 FE1).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example: { codigo: DADOS_INVALIDOS, mensagem: 'Dados inválidos. Corrija os campos indicados.', campos: { forma_pagamento: 'valor não permitido' } }
+    NaoEncontrado:
+      description: Registro inexistente ou de outra organização (NAO_ENCONTRADO).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    RegraViolada:
+      description: |
+        Regra violada: CLIENTE_INATIVO, ITEM_INDISPONIVEL, VENDA_NAO_PENDENTE, FALHA_ESTOQUE (UC15 FE1), VENDA_NAO_CONFIRMADA (UC16 FE1),
+        VENDA_INCONSISTENTE (UC16 FE2).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erro' }
+          example: { codigo: ITEM_INDISPONIVEL, mensagem: 'Há equipamentos indisponíveis no pedido.', campos: { ids_equipamento: 'indisponíveis: 12, 15' } }
+
+  schemas:
+    Erro:
+      type: object
+      required: [codigo, mensagem, campos]
+      properties:
+        codigo: { type: string }
+        mensagem: { type: string }
+        campos: { type: object, additionalProperties: { type: string } }
+    SituacaoVenda:
+      type: string
+      enum: [Pendente, Confirmada, Cancelada]
+    FormaPagamento:
+      type: string
+      enum: [Pix, Boleto, Transferência bancária, Cartão de crédito]
+    PedidoEntrada:
+      type: object
+      required: [ids_equipamento]
+      properties:
+        ids_equipamento: { type: array, minItems: 1, maxItems: 50, uniqueItems: true, items: { type: integer } }
+        forma_pagamento: { $ref: '#/components/schemas/FormaPagamento', description: 'Opcional (DP-79); omitida = A definir.' }
+    AjusteEntrada:
+      type: object
+      required: [forma_pagamento]
+      properties:
+        forma_pagamento: { $ref: '#/components/schemas/FormaPagamento' }
+    ConfirmacaoEntrada:
+      type: object
+      required: [data_venda, forma_pagamento]
+      properties:
+        data_venda: { type: string, format: date }
+        forma_pagamento: { $ref: '#/components/schemas/FormaPagamento' }
+    ItemCatalogo:
+      type: object
+      properties:
+        id_equipamento: { type: integer }
+        identificacao: { type: string }
+        id_categoria: { type: integer }
+        categoria_nome: { type: string }
+        modelo: { type: string }
+        condicao: { type: string }
+        valor: { type: number }
+    PaginaCatalogo:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ItemCatalogo' } }
+        total: { type: integer }
+        page: { type: integer }
+        size: { type: integer }
+    ItemVenda:
+      type: object
+      properties:
+        id_item_venda: { type: integer }
+        id_equipamento: { type: integer }
+        identificacao: { type: string }
+        modelo: { type: string }
+        categoria_nome: { type: string }
+        condicao: { type: string }
+        valor: { type: number }
+    Venda:
+      type: object
+      properties:
+        id_venda: { type: integer }
+        id_organizacao_cliente: { type: integer }
+        nome_organizacao: { type: string }
+        data_venda: { type: string, format: date }
+        situacao: { $ref: '#/components/schemas/SituacaoVenda' }
+        forma_pagamento: { type: string, description: "'A definir' até a confirmação." }
+        quantidade: { type: integer }
+        valor_total: { type: number }
+        itens: { type: array, items: { $ref: '#/components/schemas/ItemVenda' } }
+        nota_fiscal: { type: object, nullable: true, properties: { id_nota: { type: integer }, numero: { type: string }, data_emissao: { type: string, format: date } } }
+    VendaResumo:
+      type: object
+      properties:
+        id_venda: { type: integer }
+        id_organizacao_cliente: { type: integer }
+        nome_organizacao: { type: string }
+        data_venda: { type: string, format: date }
+        situacao: { $ref: '#/components/schemas/SituacaoVenda' }
+        forma_pagamento: { type: string }
+        quantidade: { type: integer }
+        valor_total: { type: number }
+        possui_nota: { type: boolean }
+    PaginaVendas:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/VendaResumo' } }
+        total: { type: integer }
+        page: { type: integer }
+        size: { type: integer }
+    NotaFiscal:
+      type: object
+      properties:
+        id_nota: { type: integer }
+        numero: { type: string, example: NFS-2026-000001 }
+        data_emissao: { type: string, format: date }
+        simulada: { type: boolean, description: Sempre true. }
+        venda: { $ref: '#/components/schemas/Venda' }
+    NotaResumo:
+      type: object
+      properties:
+        id_nota: { type: integer }
+        id_venda: { type: integer }
+        numero: { type: string }
+        data_emissao: { type: string, format: date }
+        id_organizacao_cliente: { type: integer }
+        nome_organizacao: { type: string }
+        valor_total: { type: number }
+    PaginaNotas:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/NotaResumo' } }
+        total: { type: integer }
+        page: { type: integer }
+        size: { type: integer }
+
+# Esclarecimentos do coordenador (sem mudar regra; 2026-10-31):
+# 1) Confirmar com data_venda anterior à data do pedido -> 400 DADOS_INVALIDOS (campos.data_venda), checado depois de 404 e de VENDA_NAO_PENDENTE.
+# 2) VENDA_INCONSISTENTE (UC16 FE2): venda sem itens, item com valor <= 0 ou não finito, ou soma dos itens diferente do valor_total (tolerância 0,005).
+# 3) Confirmar venda já 'Confirmada' com dados diferentes -> 422 VENDA_NAO_PENDENTE; com os mesmos dados -> 200.
+# 4) PUT /vendas/{id}/itens não revalida os itens já presentes (a confirmação revalida tudo).
+# 5) Pedido 'Cancelada' volta com itens [], quantidade 0 e valor_total 0 (linhas de ITEM_VENDA apagadas, DP-45).
+# 6) Erro de validação de ids_equipamento vem como 400 com a chave 'ids_equipamento' (sem índice).
+# 7) Download da nota envia também X-Content-Type-Options: nosniff e CSP restritiva (segurança, sem mudar regra).

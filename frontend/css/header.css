@@ -1,0 +1,165 @@
+/* Estilos do menu */
+.menu {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    height: 7rem;
+    box-shadow: 0px 1px 10px 0px rgba(102, 102, 102, 0.15);
+    position: relative; /* Adiciona posição relativa */
+}
+
+/* Estilos do logotipo */
+#logo {
+    display: flex;
+    align-items: center;
+    margin-left: 30px;
+}
+
+
+
+/* Estilos da imagem do logotipo */
+#myimg {
+    width: 200px;
+    height: auto;
+    transition: width 0.3s; /* Adiciona transição de largura */
+}
+
+/* Estilos para o menu mobile */
+.menuMobile--input {
+    display: none;
+}
+
+.menuMobile--input:checked ~ .menuMobile__list {
+    display: block;
+}
+
+.menuMobile--span {
+    display: inline-block;
+    width: 1.5rem;
+    height: 1.5rem;
+    background-image: url("../image/menu.svg");
+    background-repeat: no-repeat;
+    background-position: center;
+    cursor: pointer;
+}
+
+/* Estilos da lista de menu mobile */
+.menuMobile__list {
+    display: none;
+    position: absolute;
+    width: 100vw;
+    top: 100%;
+    left: 0;
+    background-color: var(--secundary-color);
+    z-index: 1;
+}
+
+.menuMobile__list--item {
+    text-align: center;
+    padding: 1rem;
+}
+
+.menuMobile__list--link {
+    font-size: .8rem;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--primary-color);
+}
+
+/* Estilos para o menu desktop */
+.menuDesktop {
+    display: none;
+}
+
+.banner{
+    position: relative;
+    align-items: center;
+    background-image: url("/images/gifleaf.gif");
+    
+}
+#myimg2{
+    position: relative;
+    width: 500px;
+    
+}
+
+@media screen and (min-width: 768px) {
+
+    .menuDesktop {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 90%;
+        margin: 0 auto;
+    }
+
+    .menuDesktop__list {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        position: absolute; /* Posiciona absolutamente */
+        top: 100%; /* Alinha abaixo do menu */
+        left: 0; /* Alinha à esquerda */
+        background-color: var(--secundary-color);
+        width: 100%; /* Largura total */
+        z-index: 1; /* Garante estar acima do menu */
+    }
+
+    .menuDesktop__list--link {
+        font-size: 1rem;
+        text-decoration: none;
+        text-transform: uppercase;
+        color: var(--primary-color);
+    }
+
+    #logo {
+        margin-left: 50px;
+    }
+
+    #myimg {
+        width: 150px; /* Diminui o tamanho da logo */
+    }
+
+    .Lg {
+        margin-right: 10px; /* Move o link "Entrar" mais para a esquerda */
+    }
+
+    /* Oculta as opções do menu a partir de 600px */
+    @media screen and (min-width: 600px) {
+        .menuDesktop__list {
+            display: none;
+        }
+    }
+}
+
+@media screen and (min-width: 1200px) {
+    .menuDesktop {
+        width: 70%;
+    }
+
+    #logo {
+        margin-left: 30px;
+    }
+
+    #myimg {
+        width: 200px; /* Restaura o tamanho da logo */
+    }
+
+    .Lg {
+        margin-right: 30px; /* Restaura a margem direita do link "Entrar" */
+    }
+
+    /* Exibe as opções do menu */
+    .menuDesktop__list {
+        display: flex;
+    }
+}
+
+/* Estilos para logo e entrar relativos */
+@media screen and (min-width: 1200px) {
+    .relative {
+        position: relative;
+        top: 10px; /* Ajuste conforme necessário */
+    }
+}

@@ -1,0 +1,47 @@
+/* Telas do Módulo 3 (categorias e equipamentos): app/categorias/, app/equipamentos/. UC05, UC07, UC08; RNF01, RNF06.
+   Complementa css/usuarios.css e css/organizacoes.css (tabela-usuarios vira cartões abaixo de 992 px, selos, dados-leitura). */
+/* Selos de situação do equipamento: texto + ícone + forma (nunca só cor) */
+.selo-sit-proc { color: var(--leaf-green-dark); background: var(--leaf-white); }
+.selo-sit-ok { color: var(--leaf-green-dark); background: var(--leaf-green-tint-2); }
+.selo-sit-final { color: var(--leaf-white); background: var(--leaf-green-dark); }
+.selo-protegida { color: var(--leaf-green-dark); background: var(--leaf-yellow-tint); border-color: var(--leaf-green-dark); }
+.selo-sit-final, .selo-protegida { white-space: nowrap; }
+
+/* Grupo de ações da linha: quebra em linhas, sem estourar a largura */
+.tabela-usuarios td.acoes .grupo-acoes { display: flex; flex-wrap: wrap; gap: .5rem; }
+.tabela-usuarios td.acoes .grupo-acoes .btn + .btn { margin-left: 0; }
+.tabela-equip td.acoes { white-space: normal; }
+@media (max-width: 991.98px) {
+  .tabela-usuarios td.acoes .grupo-acoes { width: 100%; }
+  .tabela-usuarios td.acoes .grupo-acoes .btn { flex: 1 1 8rem; }
+}
+.tabela-equip td[data-rotulo="Valor"], .tabela-equip td[data-rotulo="Recebimento"], .tabela-equip td[data-rotulo="Equipamentos"] { white-space: nowrap; }
+.tabela-equip .doacao-linha { display: block; }
+.texto-sem-acao { color: var(--leaf-gray); }
+
+/* Lista de ONGs e bloco de doação no modal de situação */
+.bloco-doacao { border: 1px solid var(--leaf-green-tint-2); border-radius: 8px; background: var(--leaf-green-tint); padding: .75rem 1rem; }
+.lista-motivos { margin: 0; padding-left: 1.25rem; }
+
+/* Entre 992 e 1199 px as sete colunas competem por largura: os selos podem quebrar linha (o contêiner .table-responsive é só a rede de segurança) */
+@media (min-width: 992px) { .tabela-equip .selo-situacao { white-space: normal; } }
+
+/* Resumo "Por que algumas situações não aparecem?": alvo de toque >= 44 px e foco visível */
+#sit-motivos summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; }
+#sit-motivos summary:focus-visible { outline: 3px solid var(--leaf-green-dark); outline-offset: 2px; }
+/* Entre 992 e 1199 px os cabeçalhos podem quebrar linha para reduzir a rolagem horizontal */
+@media (min-width: 992px) and (max-width: 1199.98px) { .tabela-equip th { white-space: normal; } }
+
+/* UC07 (DP-84): pré-visualização e miniatura da imagem do equipamento (dimensões fixas, sem deformar) */
+.previa-imagem { width: 160px; height: 120px; display: flex; align-items: center; justify-content: center; overflow: hidden;
+  border: 1px solid var(--leaf-green-tint-2); border-radius: 8px; background: var(--leaf-green-tint); }
+.previa-imagem img { width: 100%; height: 100%; object-fit: cover; }
+.previa-vazia { color: var(--leaf-gray); font-size: 1rem; }
+.miniatura-eq { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--leaf-green-tint-2); display: block; }
+/* DP-105: "Sem imagem" nunca quebra; no cartão, rótulo "Imagem:" e valor na mesma linha, miniatura de 56 px alinhada */
+.tabela-equip td[data-rotulo="Imagem"] { white-space: nowrap; }
+.tabela-equip .texto-sem-acao { white-space: nowrap; }
+.tabela-equip .miniatura-eq { flex: 0 0 56px; }
+@media (max-width: 991.98px) {
+  .tabela-equip td[data-rotulo="Imagem"] { display: flex; align-items: center; gap: .35rem; }
+}

@@ -1,0 +1,20 @@
+/* Telas do Módulo 2 (organizações e parceiros): app/organizacoes/, app/parceiros/. UC01, UC06; RNF01, RNF06.
+   Complementa css/usuarios.css (tabela-usuarios vira cartões no celular, botões, modais). */
+.selo-situacao { display: inline-block; font-weight: 600; line-height: 1.4; padding: .1rem .5rem; border-radius: 6px; border: 1px solid var(--leaf-green-dark); }
+.selo-ativa { color: var(--leaf-green-dark); background: var(--leaf-green-tint-2); }
+.selo-inativa { color: var(--leaf-gray); background: var(--leaf-white); border-style: dashed; }
+/* Desativar/Reativar: sem vermelho (reservado a erros); contorno verde escuro + texto */
+.app .btn-acao-situacao { background: var(--leaf-white); color: var(--leaf-green-dark); border: 2px solid var(--leaf-green-dark); font-weight: 600; }
+.app .btn-acao-situacao:hover { background: var(--leaf-green-dark); color: var(--leaf-white); }
+.app .btn:focus-visible, .app .form-control:focus, .app .form-select:focus { outline: 3px solid var(--leaf-green-dark); outline-offset: 2px; box-shadow: none; }
+.app .btn { min-height: 44px; }
+.dados-leitura { background: var(--leaf-green-tint); border: 1px solid var(--leaf-green-tint-2); border-radius: 8px; padding: .75rem 1rem; }
+.dados-leitura dl { margin: 0; display: grid; grid-template-columns: 1fr; gap: .25rem 1rem; }
+.dados-leitura dt { font-weight: 600; color: var(--leaf-green-dark); }
+.dados-leitura dd { margin: 0 0 .25rem; overflow-wrap: break-word; word-break: normal; }
+@media (min-width: 576px) { .dados-leitura dl { grid-template-columns: max-content 1fr; } .dados-leitura dd { margin: 0; } }
+.tabela-usuarios .sub { display: block; color: var(--leaf-gray); }
+@media (max-width: 991.98px) { .tabela-usuarios td .sub { display: inline; } .tabela-usuarios td .sub::before { content: " \00B7 "; } }
+/* Dados curtos nunca quebram no meio (RNF01) */
+.tabela-usuarios td[data-rotulo="CNPJ"], .tabela-usuarios td[data-rotulo="Telefone"], .selo-situacao, .badge-voce, .tabela-usuarios .nw { white-space: nowrap; }
+/* Desativados e select:disabled: regras globais em identidade.css */

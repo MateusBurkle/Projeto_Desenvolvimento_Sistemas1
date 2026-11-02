@@ -1,0 +1,144 @@
+/* Página inicial e Quem Somos. Identidade oficial em css/identidade.css (fontes e tokens); RNF01. */
+:root {
+  --bg-global: #fdfdfd;
+  --card-shadow: 0 4px 20px rgba(49, 87, 63, 0.08);
+  --hover-shadow: 0 12px 30px rgba(49, 87, 63, 0.18);
+}
+
+body {
+  font-family: var(--font-texto);
+  font-size: 1rem;
+  background-color: var(--bg-global);
+  color: var(--leaf-gray);
+}
+small, .small { font-size: 1rem; }
+.text-muted { color: var(--leaf-gray) !important; }
+.text-success { color: var(--leaf-green-dark) !important; }
+
+/* Navbar */
+.navbar {
+  padding: 0.8rem 0;
+  background: #ffffff !important;
+}
+.nav-link {
+  font-weight: 600;
+  color: var(--leaf-gray) !important;
+  transition: color 0.2s ease;
+}
+.nav-link:hover, .nav-link.active {
+  color: var(--leaf-green-dark) !important;
+}
+.nav-link.active { text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; }
+/* Cabeçalho com 6+ itens não quebra em 992 px */
+@media (min-width: 992px) {
+  .navbar .navbar-nav { flex-wrap: nowrap; }
+  .navbar .nav-link { padding-left: 0.5rem; padding-right: 0.5rem; white-space: nowrap; }
+}
+@media (min-width: 992px) and (max-width: 1199.98px) {
+  .navbar .nav-link { font-size: 1rem; padding-left: 0.4rem; padding-right: 0.4rem; }
+}
+
+/* Cards de Produtos */
+.product-card {
+  border: none !important;
+  border-radius: 16px !important;
+  background: #ffffff;
+  box-shadow: var(--card-shadow);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease !important;
+  overflow: hidden;
+}
+.product-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--hover-shadow);
+}
+.product-img-wrapper {
+  background: var(--leaf-green-tint);
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.product-img-wrapper img {
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* Botões */
+.btn-success {
+  background-color: var(--leaf-green-dark) !important;
+  border-color: var(--leaf-green-dark) !important;
+  color: #ffffff !important;
+  border-radius: 10px !important;
+  font-weight: 600;
+  padding: 0.6rem 1.2rem;
+}
+.btn-success:hover {
+  background-color: var(--leaf-green-dark-hover) !important;
+  border-color: var(--leaf-green-dark-hover) !important;
+}
+.btn-outline-success {
+  color: var(--leaf-green-dark) !important;
+  border-color: var(--leaf-green-dark) !important;
+  border-radius: 10px !important;
+  font-weight: 600;
+}
+.btn-outline-success:hover {
+  background-color: var(--leaf-green-dark) !important;
+  color: #ffffff !important;
+}
+.btn-outline-dark {
+  border-radius: 10px !important;
+  font-weight: 600;
+}
+
+/* Seção de Contato: fundo verde escuro, texto branco (8:1) */
+.contact-section {
+  background: var(--leaf-green-dark);
+  border-radius: 24px;
+  padding: 4rem 2rem;
+}
+.contact-section h2 { color: #ffffff; }
+.contact-section .btn-light { color: var(--leaf-green-dark) !important; }
+.form-control, .form-select {
+  border: 1px solid var(--leaf-gray);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+}
+
+/* Sidebar de Filtros Lateral */
+.filter-sidebar {
+  background: var(--leaf-green-dark);
+  color: #ffffff;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: var(--card-shadow);
+}
+.filter-sidebar .form-control, .filter-sidebar .form-select {
+  background: #ffffff;
+  color: var(--leaf-gray);
+}
+
+/* Rodapé: fundo verde escuro, links brancos */
+.footer-leaf { background: var(--leaf-green-dark); color: #ffffff; }
+.footer-leaf h5 { color: var(--leaf-green); }
+.footer-leaf p, .footer-leaf a { color: #ffffff; }
+.footer-leaf a:hover { color: var(--leaf-green); }
+.footer-leaf hr { border-color: rgba(255, 255, 255, 0.4); opacity: 1; }
+
+/* Estrutura das Telas de Login/Cadastro */
+.auth-container {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  padding: 2.5rem;
+  width: 100%;
+}
+
+/* Hero da home (index.html): fundo claro da identidade sobre a foto (alt do conteúdo está no logo/título) */
+.hero-leaf {
+  background: linear-gradient(rgba(243,248,241,0.92), rgba(243,248,241,0.92)),
+    url('https://images.unsplash.com/photo-1600132806370-bf17e65e942f?q=80&w=1200') center/cover;
+}

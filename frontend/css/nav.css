@@ -1,0 +1,68 @@
+/* Estilos do logotipo */
+#logo {
+    position: absolute; /* Posiciona a logo absolutamente */
+    left: 30px; /* Ajusta a posição da logo à esquerda */
+    top: 50%; /* Ajusta a posição verticalmente */
+    transform: translateY(-50%); /* Centraliza verticalmente */
+    max-width: 200px; /* Tamanho máximo da logo */
+    height: auto;
+}
+
+/* Estilos da barra de navegação */
+nav {
+    width: 100%;
+    height: 6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center; /* Centraliza os itens */
+    position: relative; /* Posição relativa para o posicionamento absoluto da logo */
+}
+
+/* Estilos da lista de navegação */
+.navbar-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center; /* Centraliza os itens */
+    flex-grow: 1;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* Estilos dos itens de navegação */
+.nav-item {
+    font-size: 25px;
+    margin-right: 20px; /* Espaçamento entre os itens */
+}
+
+/* Estilos de hover dos itens de navegação */
+.nav-item:hover {
+    border-radius: 20px;
+    background-color: #7ED957;
+}
+
+/* Último item da lista de navegação */
+.nav-item:last-child {
+    margin-right: 0; /* Remove a margem direita do último item */
+}
+
+/* Estilos do botão de login */
+.Lg {
+    position: absolute;
+    left: 90%;    
+    
+}
+
+.dropdown-item:hover{
+    background-color: #7ED957;
+
+}
+
+@media(max-width: 1240px ){
+    .nav-item{
+        display: none;
+    }
+    .Lg{
+        display: block;
+    }
+}
