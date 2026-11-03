@@ -38,10 +38,21 @@
 .previa-imagem img { width: 100%; height: 100%; object-fit: cover; }
 .previa-vazia { color: var(--leaf-gray); font-size: 1rem; }
 .miniatura-eq { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--leaf-green-tint-2); display: block; }
+
 /* DP-105: "Sem imagem" nunca quebra; no cartão, rótulo "Imagem:" e valor na mesma linha, miniatura de 56 px alinhada */
 .tabela-equip td[data-rotulo="Imagem"] { white-space: nowrap; }
 .tabela-equip .texto-sem-acao { white-space: nowrap; }
 .tabela-equip .miniatura-eq { flex: 0 0 56px; }
 @media (max-width: 991.98px) {
   .tabela-equip td[data-rotulo="Imagem"] { display: flex; align-items: center; gap: .35rem; }
+}
+
+/* UC07: o <form> envolve header/body/footer; sem isto o modal-dialog-scrollable não rola */
+.modal-dialog-scrollable .modal-content > form {
+  display: flex; flex-direction: column;
+  max-height: 100%; min-height: 0; overflow: hidden;
+}
+.modal-dialog-scrollable .modal-content > form .modal-body { overflow-y: auto; overflow-x: hidden; }
+@media (max-width: 575.98px) {
+  .modal-dialog-scrollable { margin: .5rem; height: calc(100% - 1rem); }
 }
